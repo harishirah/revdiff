@@ -285,6 +285,9 @@ func run(opts options) (int, error) {
 		OutputPath:       opts.Output,
 		StackLabels:      stackLabels,
 		NewFileTree: func(entries []diff.FileEntry) ui.FileTreeComponent {
+			if len(stackLabels) > 0 {
+				return sidepane.NewStackFileTree(entries, stackLabels)
+			}
 			return sidepane.NewFileTree(entries)
 		},
 		ParseTOC: func(lines []diff.DiffLine, filename string) ui.TOCComponent {

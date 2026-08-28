@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -25,14 +26,45 @@ type FileTree struct {
 	reviewed     map[string]string          // semantic diff fingerprint for files marked reviewed
 	fileStatuses map[string]diff.FileStatus // file change status from git, empty for non-git
 	oldPaths     map[string]string          // rename origin keyed by new path, empty for non-renames
+	stackLabels  []string                   // synthetic per-level path prefixes in stack order; empty outside stack mode
 }
 
 // treeEntry represents a single line in the file tree display.
 type treeEntry struct {
-	name  string // display name (directory name or file basename)
-	path  string // full file path (empty for directory entries)
-	isDir bool
-	depth int // indentation level
+	name    string // display name (directory name or file basename)
+	path    string // full file path (empty for directory entries)
+	isDir   bool
+	isLevel bool // stack level header; implies isDir, but truncates from the right
+	depth   int  // indentation level
+}
+
+// NewStackFileTree builds a FileTree for a stack review. labels are the
+// synthetic per-level path prefixes in stack order; every path is expected to
+// carry one. The tree then renders three tiers - level, directory, file -
+// instead of the usual two.
+//
+// The extra tier exists because the level label sits at the head of the path
+// and truncateDirName trims directory rows from the left: at the default tree
+// width a row like "3~feature/auth-refactor/internal/service/" would render as
+// "…rnal/service/", dropping the only thing identifying which PR it belongs to.
+func NewStackFileTree(entries []diff.FileEntry, labels []string) *FileTree {
+	ft := NewFileTree(nil)
+	ft.stackLabels = append([]string(nil), labels...)
+	ft.Rebuild(entries)
+	return ft
+}
+
+// levelOf returns the index of the stack label owning path, or -1. Matching is
+// by whole label, longest first: branch names may contain "/", so a positional
+// split on the first separator would misattribute "2~feature/auth/app/main.go".
+func (ft *FileTree) levelOf(path string) int {
+	best, bestLen := -1, -1
+	for i, label := range ft.stackLabels {
+		if strings.HasPrefix(path, label+"/") && len(label) > bestLen {
+			best, bestLen = i, len(label)
+		}
+	}
+	return best
 }
 
 // renderCtx holds rendering context for a file tree entry,
@@ -442,9 +474,16 @@ func (ft *FileTree) Render(r FileTreeRender) string {
 		e := ft.entries[idx]
 		var line string
 
-		if e.isDir {
-			line = r.Resolver.Style(style.StyleKeyDirEntry).Render(" " + ft.truncateDirName(e.name, r.Width-3))
-		} else {
+		switch {
+		case e.isLevel:
+			// the identifying part of a level caption is at the head, so it
+			// truncates from the right, unlike a directory path
+			indent := strings.Repeat(" ", e.depth)
+			line = r.Resolver.Style(style.StyleKeyDirEntry).Render(" " + indent + truncateRight(e.name, r.Width-3-e.depth))
+		case e.isDir:
+			indent := strings.Repeat(" ", e.depth)
+			line = r.Resolver.Style(style.StyleKeyDirEntry).Render(" " + indent + ft.truncateDirName(e.name, r.Width-3-e.depth))
+		default:
 			line = ft.renderFileEntry(e, idx, r.Width, rc)
 		}
 
@@ -496,9 +535,13 @@ func (ft *FileTree) nextUnreviewedAfterCursor() string {
 }
 
 // buildEntries groups files by directory and creates a flat entry list.
+// In stack mode it adds a level tier above the directory tier.
 func (ft *FileTree) buildEntries(files []string) []treeEntry {
 	if len(files) == 0 {
 		return nil
+	}
+	if len(ft.stackLabels) > 0 {
+		return ft.buildStackEntries(files)
 	}
 
 	// group files by directory
@@ -537,6 +580,82 @@ func (ft *FileTree) buildEntries(files []string) []treeEntry {
 		}
 	}
 	return entries
+}
+
+// buildStackEntries groups files by stack level, then by directory, producing
+// three tiers. Levels are emitted in stack order (the order of ft.stackLabels)
+// rather than sorted, so the tree reads bottom-of-stack to top regardless of
+// how the branches happen to sort.
+//
+// A file carrying no known label is grouped under a trailing unlabelled tier
+// rather than dropped, so a routing bug shows up on screen instead of silently
+// losing files.
+func (ft *FileTree) buildStackEntries(files []string) []treeEntry {
+	const unlabelled = -1
+	byLevel := make(map[int]map[string][]string)
+	for _, f := range files {
+		lvl := ft.levelOf(f)
+		dir := ft.stackRelDir(f, lvl)
+		if byLevel[lvl] == nil {
+			byLevel[lvl] = make(map[string][]string)
+		}
+		byLevel[lvl][dir] = append(byLevel[lvl][dir], f)
+	}
+
+	order := make([]int, 0, len(byLevel))
+	for i := range ft.stackLabels {
+		if byLevel[i] != nil {
+			order = append(order, i)
+		}
+	}
+	if byLevel[unlabelled] != nil {
+		order = append(order, unlabelled)
+	}
+
+	entries := make([]treeEntry, 0, len(files)+len(order)*2)
+	for _, lvl := range order {
+		entries = append(entries, treeEntry{name: ft.levelDisplayName(lvl), isDir: true, isLevel: true, depth: 0})
+
+		dirFiles := byLevel[lvl]
+		dirs := slices.Sorted(maps.Keys(dirFiles))
+		for _, dir := range dirs {
+			name := dir + "/"
+			if dir == "." {
+				name = "./"
+			}
+			entries = append(entries, treeEntry{name: name, isDir: true, depth: 1})
+
+			list := dirFiles[dir]
+			sort.Strings(list)
+			for _, f := range list {
+				entries = append(entries, treeEntry{name: filepath.Base(f), path: f, isDir: false, depth: 2})
+			}
+		}
+	}
+	return entries
+}
+
+// stackRelDir returns the directory of f relative to its level label, so the
+// directory tier shows "app/ui/" rather than repeating the label on every row.
+func (ft *FileTree) stackRelDir(f string, level int) string {
+	if level < 0 {
+		return filepath.Dir(f)
+	}
+	return filepath.Dir(strings.TrimPrefix(f, ft.stackLabels[level]+"/"))
+}
+
+// levelDisplayName renders the level tier caption: the 1-based stack position
+// and the branch name, with the synthetic separator dropped. Falls back to the
+// raw label when it does not carry one.
+func (ft *FileTree) levelDisplayName(level int) string {
+	if level < 0 {
+		return "(unlabelled)"
+	}
+	label := ft.stackLabels[level]
+	if _, branch, found := strings.Cut(label, "~"); found {
+		return strconv.Itoa(level+1) + ". " + branch + "/"
+	}
+	return label + "/"
 }
 
 // renderFileEntry renders a single file entry in the tree, truncating long names to prevent wrapping.
@@ -632,6 +751,27 @@ func (ft *FileTree) fileIndices() []int {
 		}
 	}
 	return indices
+}
+
+// truncateRight trims a name from the right to fit maxWidth display cells,
+// appending an ellipsis when truncated. Used for stack level captions, whose
+// identifying content (position and branch name) is at the head - the opposite
+// of a directory path, where the tail is what identifies it.
+func truncateRight(name string, maxWidth int) string {
+	if maxWidth <= 0 || runewidth.StringWidth(name) <= maxWidth {
+		return name
+	}
+	w := 0
+	end := 0
+	for i, r := range name {
+		rw := runewidth.RuneWidth(r)
+		if w+rw > maxWidth-1 { // reserve 1 cell for "…"
+			break
+		}
+		w += rw
+		end = i + len(string(r))
+	}
+	return name[:end] + "…"
 }
 
 // truncateDirName trims a directory name from the left to fit maxWidth display cells,

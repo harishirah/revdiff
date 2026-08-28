@@ -1035,3 +1035,133 @@ func TestNewFileTree_Nil(t *testing.T) {
 	assert.NotPanics(t, func() { ft.EnsureVisible(10) })
 	assert.NotPanics(t, func() { ft.SetReviewed("x.go", "fp-x") })
 }
+
+func stackEntries(paths ...string) []diff.FileEntry {
+	entries := make([]diff.FileEntry, len(paths))
+	for i, p := range paths {
+		entries[i] = diff.FileEntry{Path: p}
+	}
+	return entries
+}
+
+// levels must render in stack order, not alphabetical order - the whole point
+// of the ordinal in the label.
+func TestNewStackFileTree_levelOrderIsStackOrder(t *testing.T) {
+	labels := []string{"1~zebra", "2~alpha", "3~middle"}
+	ft := NewStackFileTree(stackEntries(
+		"3~middle/c.go", "1~zebra/a.go", "2~alpha/b.go",
+	), labels)
+
+	var captions []string
+	for _, e := range ft.entries {
+		if e.isLevel {
+			captions = append(captions, e.name)
+		}
+	}
+	assert.Equal(t, []string{"1. zebra/", "2. alpha/", "3. middle/"}, captions)
+}
+
+func TestNewStackFileTree_threeTiers(t *testing.T) {
+	ft := NewStackFileTree(stackEntries(
+		"1~feat-a/app/main.go", "1~feat-a/app/ui/view.go", "1~feat-a/README.md",
+		"2~feature/ui/app/x.go",
+	), []string{"1~feat-a", "2~feature/ui"})
+
+	type row struct {
+		name    string
+		isDir   bool
+		isLevel bool
+		depth   int
+	}
+	got := make([]row, 0, len(ft.entries))
+	for _, e := range ft.entries {
+		got = append(got, row{e.name, e.isDir, e.isLevel, e.depth})
+	}
+	assert.Equal(t, []row{
+		{"1. feat-a/", true, true, 0},
+		{"./", true, false, 1},
+		{"README.md", false, false, 2},
+		{"app/", true, false, 1},
+		{"main.go", false, false, 2},
+		{"app/ui/", true, false, 1},
+		{"view.go", false, false, 2},
+		{"2. feature/ui/", true, true, 0},
+		{"app/", true, false, 1},
+		{"x.go", false, false, 2},
+	}, got, "directory tier must be relative to the level, not repeat the label")
+}
+
+// cursor motions already skip isDir rows, so the extra tier needs no
+// navigation changes - this pins that.
+func TestNewStackFileTree_cursorSkipsLevelRows(t *testing.T) {
+	ft := NewStackFileTree(stackEntries("1~a/x.go", "2~b/y.go"), []string{"1~a", "2~b"})
+
+	require.Equal(t, "1~a/x.go", ft.SelectedFile())
+	ft.StepFile(DirectionNext)
+	assert.Equal(t, "2~b/y.go", ft.SelectedFile())
+	ft.StepFile(DirectionPrev)
+	assert.Equal(t, "1~a/x.go", ft.SelectedFile())
+}
+
+func TestNewStackFileTree_unlabelledFilesGrouped(t *testing.T) {
+	ft := NewStackFileTree(stackEntries("1~a/x.go", "stray.go"), []string{"1~a"})
+
+	var captions []string
+	for _, e := range ft.entries {
+		if e.isLevel {
+			captions = append(captions, e.name)
+		}
+	}
+	assert.Equal(t, []string{"1. a/", "(unlabelled)"}, captions,
+		"an unroutable path must be visible, not silently dropped")
+	assert.Contains(t, ft.VisibleFiles(), "stray.go")
+}
+
+// the non-stack tree must be byte-identical: buildEntries leaves depths at
+// 0/1 and both render branches add max(0, depth) == 0 columns.
+func TestFileTree_nonStackRenderUnchangedByStackTiers(t *testing.T) {
+	ft := NewFileTree(stackEntries("app/main.go", "app/ui/view.go", "README.md"))
+	res := style.PlainResolver()
+	out := ft.Render(FileTreeRender{Width: 30, Height: 20, Resolver: res, Renderer: style.NewRenderer(res)})
+
+	assert.Contains(t, out, " ./")
+	assert.Contains(t, out, " app/")
+	assert.NotContains(t, out, "  app/", "non-stack dir rows must keep their single-space indent")
+}
+
+func TestNewStackFileTree_renderIndentsTiers(t *testing.T) {
+	ft := NewStackFileTree(stackEntries("1~feat-a/app/main.go"), []string{"1~feat-a"})
+	res := style.PlainResolver()
+	out := ft.Render(FileTreeRender{Width: 40, Height: 20, Resolver: res, Renderer: style.NewRenderer(res)})
+
+	assert.Contains(t, out, " 1. feat-a/")
+	assert.Contains(t, out, "  app/", "directory tier sits one column in from the level tier")
+}
+
+// level captions truncate from the RIGHT: the position and branch name at the
+// head are what identify the PR, unlike a directory path whose tail matters.
+func TestTruncateRight(t *testing.T) {
+	tests := []struct {
+		name  string
+		in    string
+		width int
+		want  string
+	}{
+		{"fits", "1. feat/", 20, "1. feat/"},
+		{"exact", "abcde", 5, "abcde"},
+		{"truncates keeping head", "1. feature-auth-refactor/", 10, "1. featur…"},
+		{"zero width", "abc", 0, "abc"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, truncateRight(tt.in, tt.width))
+		})
+	}
+}
+
+func TestFileTree_levelOf_longestMatch(t *testing.T) {
+	ft := NewStackFileTree(nil, []string{"1~feat", "2~feat/sub"})
+	assert.Equal(t, 0, ft.levelOf("1~feat/app/main.go"))
+	assert.Equal(t, 1, ft.levelOf("2~feat/sub/app/main.go"))
+	assert.Equal(t, -1, ft.levelOf("app/main.go"))
+}
