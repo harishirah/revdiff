@@ -65,6 +65,50 @@ func setupVCSRenderer(opts options) (vcsSetup, error) {
 	}
 }
 
+// setupStackRenderer builds the renderer for --stack-ref mode: one level per
+// PR in the stack, each diffing its own BASE..HEAD range, presented as a single
+// file list with synthetic per-level path prefixes.
+//
+// Stack mode is git-only — it exists to review GitHub PR stacks, and its levels
+// are branch ranges.
+//
+// Include/exclude filters are applied per level, i.e. *inside* the stack
+// renderer, so a user prefix like "app" still matches the real path rather than
+// the label-prefixed one. One *Git backs every level; it holds only workDir.
+func setupStackRenderer(opts options) (vcsSetup, error) {
+	cwd, cwdErr := os.Getwd()
+	if cwdErr != nil {
+		cwd = "."
+	}
+	vcsType, vcsRoot := diff.DetectVCS(cwd)
+	if vcsType != diff.VCSGit {
+		return vcsSetup{}, errors.New("--stack-ref requires a git repository")
+	}
+
+	g := diff.NewGit(vcsRoot)
+	levels := make([]diff.StackLevel, 0, len(opts.stackLevels))
+	for _, lv := range opts.stackLevels {
+		// pre-flight both sides so a typo in a later level fails here rather
+		// than half-populating the tree once the TUI is already up
+		if err := g.VerifyRef(lv.base); err != nil {
+			return vcsSetup{}, fmt.Errorf("--stack-ref %s..%s: %w", lv.base, lv.head, err)
+		}
+		if err := g.VerifyRef(lv.head); err != nil {
+			return vcsSetup{}, fmt.Errorf("--stack-ref %s..%s: %w", lv.base, lv.head, err)
+		}
+		levels = append(levels, diff.StackLevel{Base: lv.base, Head: lv.head, Inner: wrapFilters(g, opts)})
+	}
+
+	r, err := diff.NewStackRenderer(levels)
+	if err != nil {
+		return vcsSetup{}, err
+	}
+
+	// blamer, untrackedFn and commitLogger stay nil: all three would receive
+	// label-prefixed paths or an empty ref and cannot serve stack mode.
+	return vcsSetup{renderer: r, vcsType: diff.VCSGit, gitRoot: vcsRoot, workDir: vcsRoot}, nil
+}
+
 // makeGitRenderer selects the appropriate git renderer based on flags.
 // reuses the provided *Git instance as the default renderer to avoid double allocation.
 func makeGitRenderer(g *diff.Git, opts options, repoRoot string) (ui.Renderer, string, error) { //nolint:unparam // error kept for consistency with makeHgRenderer/makeNoVCSRenderer

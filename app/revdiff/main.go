@@ -172,6 +172,16 @@ func run(opts options) (int, error) {
 		}
 		defer tty.Close()
 		programOptions = append(programOptions, tea.WithInput(tty))
+	case opts.stackMode():
+		var setup vcsSetup
+		setup, err = setupStackRenderer(opts)
+		if err != nil {
+			return 0, err
+		}
+		renderer = setup.renderer
+		gitRoot = setup.gitRoot
+		workDir = setup.workDir
+		vcsType = setup.vcsType
 	default:
 		var setup vcsSetup
 		setup, err = setupVCSRenderer(opts)
@@ -404,6 +414,12 @@ func sourceEditorPolicy(opts options, workDir string) ui.SourceEditorPolicy {
 	switch {
 	case opts.Stdin:
 		return ui.SourceEditorPolicy{} // unsupported
+	case opts.stackMode():
+		// Stack paths carry a synthetic level prefix, so they do not name a
+		// real file. sourceEditorTarget tolerates a non-existent path, so
+		// without this gate the editor would open <repo>/<label>/<path> and a
+		// save would drop a junk file into the repo.
+		return ui.SourceEditorPolicy{}
 	case opts.compareAbsNew != "":
 		// Always prefer --compare-new in compare mode.
 		return ui.SourceEditorPolicy{

@@ -335,6 +335,19 @@ func (g *Git) CommitLog(ref string) ([]CommitInfo, error) {
 	return g.parseCommitLog(out), nil
 }
 
+// VerifyRef reports whether ref resolves to a commit in this repository.
+// Used to fail fast on a bad ref before the TUI starts, instead of surfacing
+// an opaque diff error once a partially populated view is already on screen.
+func (g *Git) VerifyRef(ref string) error {
+	if strings.TrimSpace(ref) == "" {
+		return errors.New("empty ref")
+	}
+	if _, err := g.runGit("rev-parse", "--verify", "--quiet", ref+"^{commit}"); err != nil {
+		return fmt.Errorf("ref %q not found: %w", ref, err)
+	}
+	return nil
+}
+
 // commitLogRange translates a combined ref string to git's log range syntax.
 // Single ref "X" becomes "X..HEAD"; "X..Y" passes through.
 func (g *Git) commitLogRange(ref string) string {

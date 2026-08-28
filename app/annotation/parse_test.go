@@ -209,3 +209,33 @@ func TestParse_RoundTripPreservesIndentedHashHeader(t *testing.T) {
 	assert.Equal(t, " ## one space", parsed[1].Comment)
 	assert.Equal(t, "  ## two spaces", parsed[2].Comment)
 }
+
+func TestParse_RoundTripStackPrefixedPaths(t *testing.T) {
+	// Stack mode prefixes every path with a synthetic "<ordinal>~<branch>"
+	// label so files from different PRs stay distinct in the store and in the
+	// output. The header grammar has no metadata slot, so the label rides
+	// inside the path field - this test pins that it survives the round trip
+	// for every record shape, including branch names containing a slash.
+	s := NewStore()
+	s.Add(Annotation{File: "01~feat-auth/app/main.go", Line: 42, Type: "+", Comment: "use errors.Is"})
+	s.Add(Annotation{File: "01~feat-auth/app/main.go", Line: 0, Type: "", Comment: "file note"})
+	s.Add(Annotation{File: "02~feature/ui-work/app/ui/view.go", Line: 10, EndLine: 20, Type: "-", Comment: "drop this hunk"})
+	s.Add(Annotation{File: "10~fix/app/x.go", Line: 7, Type: " ", Comment: "context note"})
+
+	parsed, err := Parse(strings.NewReader(s.FormatOutput()))
+	require.NoError(t, err)
+	require.Len(t, parsed, 4)
+
+	got := NewStore()
+	for _, a := range parsed {
+		got.Add(a)
+	}
+	assert.Equal(t, s.FormatOutput(), got.FormatOutput())
+
+	// the same file annotated in two levels must stay two records, not collide
+	collide := NewStore()
+	collide.Add(Annotation{File: "1~feat-a/app/main.go", Line: 42, Type: "+", Comment: "first"})
+	collide.Add(Annotation{File: "2~feat-b/app/main.go", Line: 42, Type: "+", Comment: "second"})
+	assert.Equal(t, 2, collide.Count())
+	assert.Len(t, collide.Files(), 2)
+}
