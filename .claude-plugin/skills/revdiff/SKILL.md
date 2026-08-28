@@ -1,6 +1,6 @@
 ---
 name: revdiff
-description: Review diffs, files, and documents with inline annotations in a TUI overlay, or answer questions about revdiff usage, configuration, themes, and keybindings. Opens revdiff in agterm/tmux/zellij/herdr/kitty/wezterm/cmux/ghostty/iterm2/emacs-vterm, captures annotations, and addresses them. Works in git, hg, and jj repos (auto-detected). Activates on "revdiff", "review diff", "review changes", "annotate diff", "git review with revdiff", "hg review with revdiff", "review jj change", "interactive diff review", "revdiff all files", "review all files", "browse all files", "revdiff <file>", "revdiff README.md", "revdiff /tmp/notes.txt", "review this file", "annotate this file", "review file with revdiff", "open this review in revdiff", "show review in revdiff", "review in revdiff", "revdiff config", "revdiff themes", "revdiff keybindings", "how to configure revdiff", "what themes does revdiff have".
+description: Review diffs, files, and documents with inline annotations in a TUI overlay, or answer questions about revdiff usage, configuration, themes, and keybindings. Opens revdiff in agterm/tmux/zellij/herdr/kitty/wezterm/cmux/ghostty/iterm2/emacs-vterm, captures annotations, and addresses them. Works in git, hg, and jj repos (auto-detected). Activates on "revdiff", "review diff", "review changes", "annotate diff", "git review with revdiff", "hg review with revdiff", "review jj change", "interactive diff review", "revdiff all files", "review all files", "browse all files", "revdiff <file>", "revdiff README.md", "revdiff /tmp/notes.txt", "review this file", "annotate this file", "review file with revdiff", "open this review in revdiff", "show review in revdiff", "review in revdiff", "revdiff config", "revdiff themes", "revdiff keybindings", "how to configure revdiff", "what themes does revdiff have". Reviews a whole stack of GitHub PRs in one session on "review the stack", "review my PR stack", "review all the stacked PRs".
 argument-hint: 'optional: ref(s), "all files", or file path'
 allowed-tools: [Bash, Read, Edit, Write, Grep, Glob]
 ---
@@ -19,6 +19,7 @@ Review diffs with inline annotations using revdiff TUI in a terminal overlay. Wo
 - "revdiff README.md", "revdiff docs/plan.md", "revdiff /tmp/notes.txt" — single-file review (`--only` mode)
 - "review this file", "annotate this file", "review file with revdiff"
 - "open this review in revdiff", "show review in revdiff", "review in revdiff" — open an in-session review (preload mode)
+- "review the stack", "review my PR stack", "review all the stacked PRs", "review the stack and fix everything" — stacked GitHub PR review (`--stack-ref` mode)
 
 ## Answering Questions
 
@@ -43,6 +44,111 @@ The history file is also the recovery path when a review is cut short by a lost 
 ## Opening an In-Session Review
 
 When the user asks to open an in-session review in revdiff (the conversation already contains review comments produced earlier in the session), write those comments to a temp file (e.g. `/tmp/revdiff-review-XXXXXX.md`) using the format documented in `references/usage.md` ("Output Format" section), then run the normal launcher flow (Step 1 ref detection, Step 2 invocation) with `--annotations=<temp-path>` appended. Step 3 onward handles the curated annotations as usual.
+
+## Reviewing a Stack of GitHub PRs
+
+When the user asks to "review the stack", "review my PR stack", "review all the stacked PRs", or "review this stack and fix everything", review every PR in one revdiff session instead of looping one PR at a time.
+
+Stack mode is **git only** and requires the `gh` CLI, authenticated.
+
+### Discover the stack
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/detect-stack.sh"
+```
+
+It emits flat `key: value` lines. Read `stack_ok` first:
+
+- `stack_ok: true` — use `level_N_ref` for each level, in ascending N (bottom-of-stack first).
+- `stack_ok: false` — report `error:` verbatim; it is written to be actionable (gh missing, not authenticated, branch not checked out locally). Do not work around it silently.
+- `needs_ask: true` with `fork_at:` set — two open PRs share a base, so the stack is not linear. Ask the user which branch of the fork to review using the names in `fork_candidates`, then re-run scoped to their answer.
+
+Keep the whole table. The mapping from **level ordinal → branch** is what routes fixes later, and you already have it here.
+
+### Launch
+
+Pass one `--stack-ref` per level, in ascending order:
+
+```bash
+"$("${CLAUDE_SKILL_DIR}/scripts/resolve-launcher.sh" launch-revdiff.sh "${CLAUDE_PLUGIN_DATA}")" \
+  --stack-ref=main..feat-auth --stack-ref=feat-auth..feat-ui --stack-ref=feat-ui..feat-docs
+```
+
+Everything from Step 2 still applies: max bash timeout, no `run_in_background`, `--description` for context. `--stack-ref` cannot be combined with refs, `--staged`, `--untracked`, `--only`, `--all-files`, or `--stdin`; `--include`, `--exclude` and `--annotations` are fine.
+
+To review only part of a stack, pass fewer `--stack-ref` flags. `--include`/`--exclude` filter by **real** path (`app`, `vendor`), not by level label — a label prefix matches nothing and yields an empty tree.
+
+### Reading stack annotations
+
+Every path is prefixed with a synthetic level label, `<ordinal>~<branch>`:
+
+```
+## 1~feat-auth/app/main.go:42 (+)
+use errors.Is() instead of direct comparison
+
+## 2~feat-ui/app/ui/view.go:10 (-)
+don't remove this validation
+```
+
+To route an annotation, find the level whose `<ordinal>~<head>` label is a prefix of the path, then strip `label + "/"`; the remainder is the repo-relative path **on that branch**.
+
+**Do not split the path on the first `/`.** Branch names contain slashes (`2~feature/ui-work/app/main.go`), so a positional split attributes the fix to a branch named `2~feature`. Match against the known label set instead — you have it from `detect-stack.sh`.
+
+Classification (Step 3.5) is unchanged; explanation requests are answered the same way.
+
+### Applying fixes across the stack
+
+Run this only **after** the review session has closed, never while revdiff is open. Work bottom-up: a fix on level 1 moves the base of every level above it.
+
+**Preconditions — check all of them before mutating anything:**
+
+```bash
+git rev-parse --abbrev-ref HEAD                       # record START_BRANCH, restore it at the end
+git status --porcelain -uno                           # must be empty (untracked files are fine)
+ls "$(git rev-parse --git-path rebase-merge)" 2>/dev/null   # must not exist
+ls "$(git rev-parse --git-path rebase-apply)" 2>/dev/null   # must not exist
+```
+
+**Snapshot every branch tip BEFORE the first commit, and write the table to a temp file.** This is load-bearing twice over: `git rebase --onto` needs each parent's *pre-fix* tip to know which commits belong to the child, and the file is the only way to undo a half-finished restack if the session is lost.
+
+```bash
+for b in "${BRANCHES[@]}"; do
+  printf '%s %s
+' "$b" "$(git rev-parse "$b")"
+done > "${TMPDIR:-/tmp}/revdiff-stack-tips-$$.txt"
+```
+
+Then, for each level in ascending order:
+
+```bash
+git switch "$BRANCH_I"
+# levels above the bottom must first be replayed onto their parent's NEW tip
+git rebase --onto "$BRANCH_PARENT" "$OLD_TIP_PARENT" "$BRANCH_I"
+# apply this level's annotations, then
+git commit -am "review: <summary>"
+```
+
+`$OLD_TIP_PARENT` is the value from the snapshot, **not** the parent's tip after the parent was rebased — reading it lazily inside the loop is the natural-looking mistake and it silently replays the parent's own commits onto the child. A level with no fixes still needs the rebase, because its parent moved.
+
+Finish with `git switch "$START_BRANCH"`.
+
+**On a rebase conflict, stop.** Never auto-resolve, never `git rebase --skip`. Tell the user plainly: HEAD is detached mid-replay, levels below this one are already rewritten locally, and nothing has been pushed. Offer, in this order:
+
+1. Resolve the conflict, `git rebase --continue`, and resume from the next level.
+2. `git rebase --abort` — returns this branch only; lower levels stay rewritten.
+3. Full undo — `git rebase --abort`, then `git update-ref refs/heads/<branch> <old tip>` for every level from the snapshot file.
+
+### Pushing
+
+Push last, once, after every level is committed and restacked:
+
+```bash
+git push --atomic --force-with-lease --force-if-includes origin feat-auth feat-ui feat-docs
+```
+
+`--force-if-includes` is the correct companion to `--force-with-lease`: the lease alone compares against a remote-tracking ref that is stale unless you fetch, and fetching defeats the lease. `--atomic` avoids the window where an already-pushed lower level makes the PR above it show an enormous diff. No `gh pr edit --base` is needed — the tips moved, the topology did not.
+
+**Ask the user before pushing, in its own turn.** Force-pushing rewrites published history and is not reversible from here. Show, per branch, the old remote sha, the new local sha, and the commit-count delta, then wait for an explicit yes. Do not bundle the push into the same tool call as the restack.
 
 ## Reviewing a Diff That Lives Outside the Working Tree
 
