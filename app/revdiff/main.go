@@ -131,6 +131,7 @@ func run(opts options) (int, error) {
 		untrackedFn        func() ([]string, error)
 		untrackedRenamesFn func([]string) ([]diff.FileEntry, error)
 		commitLogger       diff.CommitLogger
+		stackLabels        []string
 		vcsType            diff.VCSType
 		err                error
 	)
@@ -182,6 +183,7 @@ func run(opts options) (int, error) {
 		gitRoot = setup.gitRoot
 		workDir = setup.workDir
 		vcsType = setup.vcsType
+		stackLabels = setup.stackLabels
 	default:
 		var setup vcsSetup
 		setup, err = setupVCSRenderer(opts)
@@ -280,6 +282,7 @@ func run(opts options) (int, error) {
 		ActiveThemeName:  themes.catalog.ActiveName(opts.Theme),
 		AnnotationMarker: opts.AnnotationMarker,
 		OutputPath:       opts.Output,
+		StackLabels:      stackLabels,
 		NewFileTree: func(entries []diff.FileEntry) ui.FileTreeComponent {
 			return sidepane.NewFileTree(entries)
 		},

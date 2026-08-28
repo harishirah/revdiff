@@ -149,6 +149,8 @@ func (m Model) transientHint() string {
 		return m.reload.hint
 	case m.output.hint != "":
 		return m.output.hint
+	case m.stack.hint != "":
+		return m.stack.hint
 	case m.compact.hint != "":
 		return m.compact.hint
 	case m.editorState.hint != "":
@@ -209,6 +211,9 @@ func (m Model) statusBarText() string {
 
 	// build right-side segments
 	var rightParts []string
+	if pos := m.stackPosition(); pos != "" {
+		rightParts = append(rightParts, "⇅ "+pos)
+	}
 	if rc := m.tree.ReviewedCount(); rc > 0 {
 		rightParts = append(rightParts, fmt.Sprintf("✓ %d/%d", rc, m.tree.TotalFiles()))
 	}

@@ -155,6 +155,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// mirroring handleKey.
 	m.reload.hint = ""
 	m.output.hint = ""
+	m.stack.hint = ""
 	m.compact.hint = ""
 	m.editorState.hint = ""
 

@@ -592,6 +592,7 @@ type Model struct {
 	compact     compactState      // applicability + transient hint for compact diff mode
 	editorState editorState       // transient hint state for source-file editor launches
 	output      outputState       // transient hint state for the O in-session output flush
+	stack       stackState        // per-level labels and transient hint for --stack-ref reviews
 	keys        keyState          // chord-pending state and transient hint for leader-chord keybindings
 	vim         vimState          // count accumulator, pending letter leader, and transient hint for vim-motion preset
 	wheel       wheelState        // diff-pane mouse wheel coalescing (debounced render via wheelDebounceMsg)
@@ -801,6 +802,11 @@ type ModelConfig struct {
 	// disables the flush (there is no file to write to); a non-empty path enables
 	// it. Copied into modelConfigState.outputPath as a plain value.
 	OutputPath string
+
+	// StackLabels are the synthetic per-level path prefixes of a stack review,
+	// in stack order. Empty for every other mode; the stack navigation actions
+	// and the status-bar indicator are inert without it.
+	StackLabels []string
 }
 
 // NewModel creates a new Model from the given configuration. All dependencies
@@ -947,6 +953,7 @@ func NewModel(cfg ModelConfig) (Model, error) {
 			descriptionHighlighted: precomputeDescriptionHighlight(cfg.Highlighter, descriptionFromConfig(reviewCfg)),
 		},
 		reviewed:             reviewedState{cache: make(map[string]string), pending: make(map[string]uint64)},
+		stack:                stackState{labels: append([]string(nil), cfg.StackLabels...)},
 		reload:               reloadState{applicable: cfg.ReloadApplicable},
 		compact:              compactState{applicable: cfg.CompactApplicable},
 		annot:                annotationState{rowCache: make(map[annotCacheKey][]string)},
@@ -1037,6 +1044,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// this point dismisses the last hint before the new action runs.
 	m.reload.hint = ""
 	m.output.hint = ""
+	m.stack.hint = ""
 	m.compact.hint = ""
 	m.editorState.hint = ""
 	m.keys.hint = ""
@@ -1134,6 +1142,8 @@ func (m Model) dispatchAction(action keymap.Action) (tea.Model, tea.Cmd) {
 		return m.handleHunkNav(action == keymap.ActionNextHunk)
 	case keymap.ActionNextAnnotation, keymap.ActionPrevAnnotation:
 		return m.handleAnnotNav(action == keymap.ActionNextAnnotation)
+	case keymap.ActionNextStackLevel, keymap.ActionPrevStackLevel:
+		return m.handleStackNav(action == keymap.ActionNextStackLevel)
 	case keymap.ActionReload:
 		return m.handleReload()
 	case keymap.ActionFlushOutput:

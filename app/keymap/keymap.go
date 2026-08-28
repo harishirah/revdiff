@@ -75,6 +75,8 @@ const (
 	ActionOpenEditor             Action = "open_editor"
 	ActionOpenFileInEditor       Action = "open_file_in_editor"
 	ActionFlushOutput            Action = "flush_output"
+	ActionNextStackLevel         Action = "next_stack_level"
+	ActionPrevStackLevel         Action = "prev_stack_level"
 )
 
 // SectionPane is the help section name for pane-related keybindings.
@@ -104,6 +106,8 @@ var validActions = map[Action]bool{
 	ActionOpenEditor:       true,
 	ActionOpenFileInEditor: true,
 	ActionFlushOutput:      true,
+	ActionNextStackLevel:   true,
+	ActionPrevStackLevel:   true,
 }
 
 // deprecatedActionAliases maps obsolete action names parsed from user
@@ -238,6 +242,10 @@ func defaultDescriptions() []HelpEntry {
 		{ActionPrevAnnotation, "previous annotation (across files)", "Annotations"},
 		{ActionFlushOutput, "flush annotations to output file", "Annotations"},
 
+		// stack navigation
+		{ActionNextStackLevel, "next PR in the stack", "File/Hunk"},
+		{ActionPrevStackLevel, "previous PR in the stack", "File/Hunk"},
+
 		// view toggles
 		{ActionToggleCollapsed, "toggle collapsed view", "View"},
 		{ActionToggleCompact, "toggle compact diff view", "View"},
@@ -300,6 +308,8 @@ func defaultBindings() map[string]Action {
 		"}":      ActionNextAnnotation,
 		"{":      ActionPrevAnnotation,
 		"O":      ActionFlushOutput,
+		")":      ActionNextStackLevel,
+		"(":      ActionPrevStackLevel,
 		"v":      ActionToggleCollapsed,
 		"C":      ActionToggleCompact,
 		"w":      ActionToggleWrap,

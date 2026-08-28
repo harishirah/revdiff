@@ -18,6 +18,7 @@ type vcsSetup struct {
 	untrackedFn        func() ([]string, error)
 	untrackedRenamesFn func([]string) ([]diff.FileEntry, error) // git-only; pairs untracked renames with their origin
 	commitLogger       diff.CommitLogger                        // VCS-backed commit log source; nil when VCS lacks the capability
+	stackLabels        []string                                 // synthetic per-level path prefixes; set only in --stack-ref mode
 }
 
 // setupVCSRenderer detects the VCS and creates the appropriate renderer, blamer, and untracked function.
@@ -106,7 +107,7 @@ func setupStackRenderer(opts options) (vcsSetup, error) {
 
 	// blamer, untrackedFn and commitLogger stay nil: all three would receive
 	// label-prefixed paths or an empty ref and cannot serve stack mode.
-	return vcsSetup{renderer: r, vcsType: diff.VCSGit, gitRoot: vcsRoot, workDir: vcsRoot}, nil
+	return vcsSetup{renderer: r, vcsType: diff.VCSGit, gitRoot: vcsRoot, workDir: vcsRoot, stackLabels: r.Labels()}, nil
 }
 
 // makeGitRenderer selects the appropriate git renderer based on flags.
