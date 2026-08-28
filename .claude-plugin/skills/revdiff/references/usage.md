@@ -24,6 +24,7 @@ revdiff --include src --exclude src/vendor  # include src/ but exclude src/vendo
 revdiff main --exclude vendor        # diff against main, excluding vendor
 revdiff --only=/tmp/plan.md          # review a file outside a repo (context-only)
 revdiff --only=docs/notes.txt        # review a file with no VCS changes (context-only)
+revdiff --stack-ref=main..feat-a --stack-ref=feat-a..feat-b  # review a stack of PRs in one session
 revdiff --compare-old=/tmp/plan-old.md --compare-new=docs/plans/plan.md  # diff two arbitrary files (no VCS needed)
 printf '# Plan\n\nBody\n' | revdiff --stdin --stdin-name plan.md  # review piped text as markdown
 some-command | revdiff --stdin --output /tmp/annotations.txt      # annotate generated output
@@ -152,6 +153,7 @@ The file picker lists paths currently visible in the sidebar, preserving annotat
 | `A` | Add file-level annotation (stored at top of diff) |
 | `@` | Toggle annotation list popup (navigate and jump to any annotation) |
 | `}` / `{` | Jump to next/previous annotation (always crosses file boundaries; silent no-op at the first/last annotation) |
+| `)` / `(` | Jump to next/previous PR in a `--stack-ref` stack (no-op with a hint at the top/base of the stack) |
 | `d` | Delete annotation under cursor |
 | `O` | Export annotations without exiting (requires `--output` and/or `--post-flush-command`) |
 | `Ctrl+E` (during annotation input) | Open `$EDITOR` for multi-line annotation (`open_editor` — rebindable) |
@@ -358,3 +360,18 @@ Set `REVDIFF_HERDR_PANE=1` in the launcher's environment to open revdiff in a zo
 ## Pane-Scoped Overlay (agterm)
 
 Set `REVDIFF_AGTERM_PANE=1` in the launcher's environment to open revdiff in the agent's own split pane instead of over the whole session, leaving the sibling pane live and visible. It applies only when that session is split — the session-wide overlay stands otherwise, and the launcher retries session-wide if agterm refuses the pane. The review gets pane width rather than session width, which is why it is opt-in. This is a launcher environment variable, not a revdiff flag.
+
+## Stacked PR Review
+
+Pass one `--stack-ref=BASE..HEAD` per PR, bottom-up, to review a whole stack in one session:
+
+```bash
+revdiff --stack-ref=main..feat-auth --stack-ref=feat-auth..feat-ui --stack-ref=feat-ui..feat-docs
+```
+
+- Git only. `--stack-ref` is mutually exclusive with refs, `--staged`, `--untracked`, `--only`, `--all-files`, `--stdin`, and `--compare-old/--compare-new`; `--include`, `--exclude` and `--annotations` are allowed
+- Every path is prefixed with a synthetic `<ordinal>~<branch>` label, so annotations read `## 1~feat-auth/app/main.go:42 (+)` and name the PR they belong to. The same file annotated in two PRs stays two separate annotations
+- `)` and `(` jump to the next / previous PR in the stack; the status bar shows `⇅ 2/3`, and `i` lists every level with its ref range
+- `--include` / `--exclude` match the **real** path (`app`, `vendor`), not the level label. To review part of a stack, pass fewer `--stack-ref` flags
+- Blame (`B`), the source editor (`e`), `--untracked` and the commit-log section are unavailable in stack mode, because the synthetic paths do not name real files
+- The review-history entry records the annotations but no diff block

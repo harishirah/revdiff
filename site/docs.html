@@ -61,6 +61,7 @@
         <a href="#all-files">All-files mode</a>
         <a href="#context-only">Context-only review</a>
         <a href="#scratch-buffer">Scratch-buffer review</a>
+        <a href="#stacked-pr-review">Stacked PR review</a>
         <a href="#description">Review description</a>
         <a href="#markdown-toc">Markdown TOC</a>
         <a href="#beyond-code-review">Beyond code review</a>
@@ -264,6 +265,13 @@ revdiff --all-files --exclude vendor --exclude mocks</code></div>
             <li><strong>Outside a git repo</strong> &mdash; <code>--only</code> is required; files are read directly from disk</li>
         </ul>
 
+        <h2 id="stacked-pr-review">Stacked PR review</h2>
+        <p>Pass one <code>--stack-ref=BASE..HEAD</code> per pull request, bottom-up, to review an entire stack of stacked PRs in a single session instead of opening revdiff once per PR.</p>
+        <div class="code-block"><code>revdiff --stack-ref=main..feat-auth --stack-ref=feat-auth..feat-ui --stack-ref=feat-ui..feat-docs</code></div>
+        <p>Every path is prefixed with a synthetic <code>&lt;ordinal&gt;~&lt;branch&gt;</code> level label, so the file tree groups files by PR and annotations come back as <code>## 1~feat-auth/app/main.go:42 (+)</code>, naming the PR each comment belongs to. The same file annotated in two PRs stays two separate annotations rather than overwriting.</p>
+        <p>Use <code>)</code> and <code>(</code> to jump between PRs; the status bar shows the current position as <code>⇅ 2/3</code>, and the <code>i</code> info popup lists every level with its ref range.</p>
+        <p><code>--stack-ref</code> is git only and mutually exclusive with refs, <code>--staged</code>, <code>--untracked</code>, <code>--only</code>, <code>--all-files</code>, <code>--stdin</code>, and <code>--compare-old</code>/<code>--compare-new</code>; <code>--include</code>, <code>--exclude</code>, and <code>--annotations</code> are allowed. Include and exclude prefixes match the real path (<code>app</code>), not the level label — to review part of a stack, pass fewer <code>--stack-ref</code> flags. Blame, the source editor, <code>--untracked</code>, and the commit-log section are unavailable in stack mode because the synthetic paths do not name real files on disk.</p>
+
         <h2 id="two-file-diff">Two-file diff</h2>
         <p>Use <code>--compare-old=&lt;path&gt;</code> together with <code>--compare-new=&lt;path&gt;</code> to diff two arbitrary files on disk using <code>git diff --no-index</code>. No VCS repository is required &mdash; this works anywhere <code>git</code> is installed.</p>
         <div class="code-block"><code>revdiff --compare-old=/tmp/plan-old.md --compare-new=docs/plans/plan.md
@@ -436,6 +444,7 @@ revdiff --dump-config > ~/.config/revdiff/config</code></div>
                 <tr><td><code>--compare-new</code></td><td>Compare mode: new file path (use with <code>--compare-old</code>)</td><td></td></tr>
                 <tr><td><code>--stdin</code></td><td>Review stdin as a scratch buffer</td><td><code>false</code></td></tr>
                 <tr><td><code>--stdin-name</code></td><td>Synthetic file name for stdin content</td><td><code>scratch-buffer</code></td></tr>
+                <tr><td><code>--stack-ref</code></td><td>Review a PR stack level as <code>BASE..HEAD</code> (may be repeated, bottom-up order)</td><td></td></tr>
                 <tr><td><code>--description</code></td><td>Prose context shown in the info popup (markdown)</td><td></td></tr>
                 <tr><td><code>--description-file</code></td><td>Read the info-popup description from this file (markdown)</td><td></td></tr>
                 <tr><td><code>-I, --include</code></td><td>Include only files matching prefix (repeatable)</td><td></td></tr>
@@ -560,6 +569,7 @@ color-border = #6272a4
                 <tr><td><code>A</code></td><td>Add file-level annotation</td></tr>
                 <tr><td><code>@</code></td><td>Toggle annotation list popup</td></tr>
                 <tr><td><code>}</code> / <code>{</code></td><td>Jump to next/previous annotation (always crosses file boundaries; silent no-op at the first/last annotation)</td></tr>
+                <tr><td><code>)</code> / <code>(</code></td><td>Jump to next/previous PR in a <code>--stack-ref</code> stack (no-op with a hint at the top/base of the stack)</td></tr>
                 <tr><td><code>d</code></td><td>Delete annotation under cursor</td></tr>
                 <tr><td><code>O</code></td><td>Export annotations without exiting (requires <code>--output</code> and/or <code>--post-flush-command</code>)</td></tr>
                 <tr><td><code>Ctrl+E</code></td><td>Open <code>$EDITOR</code> for multi-line annotation (<code>open_editor</code> &mdash; rebindable, during annotation input)</td></tr>

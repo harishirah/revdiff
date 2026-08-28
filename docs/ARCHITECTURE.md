@@ -623,12 +623,22 @@ Several mutually exclusive input sources, validated at parse time:
 | Single file(s) | `--only` / `-F` | `FileReader` | Not with include |
 | Stdin (raw text) | `--stdin` | `StdinReader` | Sniff fails or returns `ErrNotUnifiedDiff` |
 | Stdin (multi-file diff) | `--stdin` | `MultiFileStdinReader` | Sniffs the unified-diff signature |
+| PR stack | `--stack-ref` (repeatable) | `StackRenderer` | Git only; one level per PR, paths carry a `<ordinal>~<branch>` prefix |
 
 `MultiFileStdinReader` parses each section via `parseUnifiedDiff`; any per-section parse error fails
 the whole call, so the caller falls back to `StdinReader` for the entire input.
 
+`StackRenderer` composes one renderer per level, each diffing its own `BASE..HEAD` range, and
+prefixes every path with a synthetic level label. The prefix is what keeps two PRs touching the same
+file distinct in `annotation.Store` (keyed by bare path) and what carries the owning branch into the
+annotation output without changing the header grammar. It forces `Staged=false` when delegating,
+because the Model retries added files with `Staged=true` and `git diff --cached a..b` is a usage
+error. Blame, the source editor, `--untracked` and the commit log are unavailable in stack mode:
+the first three would receive synthetic paths, and the commit log has no per-level attribution.
+
 Filters stack: `--include` narrows first, then `--exclude` removes. Both wrap any renderer as
-decorators.
+decorators. In stack mode they are applied *inside* each level, so prefixes match the real path
+(`app`), never the level label.
 
 ## Design Decisions
 

@@ -33,6 +33,7 @@ Built for a specific use case: reviewing code changes, plans, and documents with
 - All-files mode: browse and annotate all tracked files with `--all-files` (git `ls-files` or jj `file list`), filter with `--include` and `--exclude`
 - No-VCS file review: `--only` files outside a VCS repo (or not in any diff) are shown as context-only with full annotation support
 - Scratch-buffer review: annotate arbitrary piped or redirected text with `--stdin`, optionally naming it with `--stdin-name`. When the piped content sniffs as a git unified diff, revdiff parses it as a real multi-file diff (review `gh pr diff` or `git format-patch -1 --stdout` output directly); otherwise the input is shown as a single context-only buffer.
+- Stacked PR review: review an entire stack of GitHub PRs in one session with repeated `--stack-ref=BASE..HEAD`, moving between PRs with `)` / `(`. Paths are prefixed with a `<ordinal>~<branch>` label so annotations name the PR they belong to
 - Pi package: launch revdiff from pi, capture annotations, and send them to the agent immediately for the normal review loop
 - Review history: auto-saves annotations and diffs to `~/.config/revdiff/history/` on quit as a safety net
 - Fully customizable colors via environment variables, CLI flags, or config file
@@ -409,6 +410,7 @@ Positional arguments support several forms:
 | `-A`, `--all-files` | Browse all tracked files, not just diffs (git or jj) | `false` |
 | `--compare-old` | Compare mode: old file path (use with `--compare-new`; uses `git diff --no-index`, no VCS repo needed) | |
 | `--compare-new` | Compare mode: new file path (use with `--compare-old`) | |
+| `--stack-ref` | Review a PR stack level as `BASE..HEAD` (may be repeated, bottom-up order) | |
 | `--stdin` | Review stdin as a scratch buffer (piped or redirected input only) | `false` |
 | `--stdin-name` | Synthetic file name for stdin content; enables extension-based highlighting/TOC | `scratch-buffer` |
 | `--description` | Prose context shown in the info popup (markdown; for multi-line text, use a multi-line quoted shell string or `--description-file`) | |
@@ -592,6 +594,8 @@ revdiff --only=/tmp/plan.md
 revdiff --only=docs/notes.txt
 
 # diff two arbitrary files (no VCS repo needed)
+revdiff --stack-ref=main..feat-auth --stack-ref=feat-auth..feat-ui  # review a stack of PRs in one session
+
 revdiff --compare-old=/tmp/plan-old.md --compare-new=docs/plans/plan.md
 
 # review arbitrary piped text as a scratch buffer
@@ -773,6 +777,7 @@ The file picker lists paths currently visible in the sidebar, so annotated-only 
 | `A` | Add file-level annotation (stored at top of diff) |
 | `@` | Toggle annotation list popup (navigate and jump to any annotation) |
 | `}` / `{` | Jump to next/previous annotation (always crosses file boundaries; silent no-op at the first/last annotation) |
+| `)` / `(` | Jump to next/previous PR in a `--stack-ref` stack (no-op with a hint at the top/base of the stack) |
 | `d` | Delete annotation under cursor |
 | `O` | Export annotations without exiting (requires `--output` and/or `--post-flush-command`) |
 | `Ctrl+E` (during annotation input) | Open `$EDITOR` for multi-line annotation (`open_editor` — rebindable) |
