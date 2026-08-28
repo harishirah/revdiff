@@ -538,3 +538,30 @@ func TestSave_DiffUsesLiteralPathspec(t *testing.T) {
 	assert.Contains(t, entries[0], "magic changed")
 	assert.NotContains(t, entries[0], "decoy changed")
 }
+
+func TestService_Save_skipDiffOmitsDiffBlock(t *testing.T) {
+	dir := t.TempDir()
+	svc := New(dir)
+
+	// stack reviews annotate synthetic <label>/<path> entries, which are
+	// repo-local by construction and so survive filterRepoFiles; SkipDiff is
+	// what stops the pointless git call.
+	svc.Save(Params{
+		Annotations:    "## 1~feat/app/main.go:1 (+)\nnote\n",
+		Path:           dir,
+		GitRoot:        dir,
+		AnnotatedFiles: []string{"1~feat/app/main.go"},
+		SubDir:         "stack",
+		SkipDiff:       true,
+	})
+
+	files, err := filepath.Glob(filepath.Join(dir, "stack", "*.md"))
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+
+	content, err := os.ReadFile(files[0]) //nolint:gosec // test-controlled path
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "## Annotations")
+	assert.Contains(t, string(content), "1~feat/app/main.go")
+	assert.NotContains(t, string(content), "## Diff", "stack reviews must not carry an empty diff block")
+}

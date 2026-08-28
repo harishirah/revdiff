@@ -271,6 +271,7 @@ func run(opts options) (int, error) {
 			workDir:     workDir,
 			vcsType:     vcsType,
 			description: description,
+			stackLabels: stackLabels,
 		}),
 		TabWidth:         opts.TabWidth,
 		Ref:              opts.ref(),

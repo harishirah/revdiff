@@ -39,6 +39,7 @@ func saveHistory(r histReq) {
 		Staged:         r.opts.Staged,
 		GitRoot:        r.gitRoot,
 		AnnotatedFiles: r.files,
+		SkipDiff:       r.opts.stackMode(),
 		SubDir:         histSubDir,
 	})
 }

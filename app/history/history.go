@@ -24,6 +24,7 @@ type Params struct {
 	GitRoot        string   // git repo root, empty when git unavailable
 	AnnotatedFiles []string // files with annotations, from Store.Files()
 	SubDir         string   // history subdirectory name override; when empty, derived from Path
+	SkipDiff       bool     // omit the diff block; set when AnnotatedFiles are not real repo paths
 }
 
 // Service manages review history persistence.
@@ -114,6 +115,12 @@ func (s *Service) historyDir(p Params) string {
 // files outside the git repo are filtered out to prevent git from failing
 // with "is outside repository" error, which would lose the diff for all files.
 func (s *Service) gitDiff(p Params) string {
+	// stack reviews annotate synthetic <label>/<path> entries; they survive
+	// filterRepoFiles (they are repo-local by construction) and reach git as
+	// pathspecs matching nothing, so the diff would be empty anyway.
+	if p.SkipDiff {
+		return ""
+	}
 	if p.GitRoot == "" || len(p.AnnotatedFiles) == 0 {
 		return ""
 	}

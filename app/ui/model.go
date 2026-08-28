@@ -430,6 +430,17 @@ type ReviewInfoConfig struct {
 	Exclude        []string
 	Compact        bool
 	CompactContext int
+
+	// Stack describes the reviewed PR stack, bottom-up. Empty for every
+	// other mode.
+	Stack []StackLevelInfo
+}
+
+// StackLevelInfo describes one PR in a reviewed stack for the info popup.
+type StackLevelInfo struct {
+	Label string // synthetic path prefix, e.g. "1~feat-auth"
+	Head  string // branch name
+	Ref   string // "base..head"
 }
 
 // reviewInfoState stores the review-info overlay summary and whole-review
@@ -1564,6 +1575,9 @@ func cloneReviewInfoConfig(cfg *ReviewInfoConfig) *ReviewInfoConfig {
 	}
 	if cfg.Exclude != nil {
 		cp.Exclude = append([]string(nil), cfg.Exclude...)
+	}
+	if cfg.Stack != nil {
+		cp.Stack = append([]StackLevelInfo(nil), cfg.Stack...)
 	}
 	return &cp
 }

@@ -476,3 +476,39 @@ func TestModel_HighlightDescription(t *testing.T) {
 		assert.Contains(t, got, "\tindented", "tabs must be preserved (markdown indentation)")
 	})
 }
+
+func TestModel_reviewHeaderText_stack(t *testing.T) {
+	m := testModel([]string{"a.go"}, nil)
+	m.review.cfg = &ReviewInfoConfig{
+		VCS: "git",
+		Stack: []StackLevelInfo{
+			{Label: "1~feat-a", Head: "feat-a", Ref: "main..feat-a"},
+			{Label: "2~feat-b", Head: "feat-b", Ref: "feat-a..feat-b"},
+		},
+	}
+	assert.Equal(t, "stack: 2 PRs", m.reviewHeaderText())
+}
+
+func TestModel_reviewRows_stackLevels(t *testing.T) {
+	m := testModel([]string{"a.go"}, nil)
+	m.review.cfg = &ReviewInfoConfig{
+		VCS: "git",
+		Stack: []StackLevelInfo{
+			{Label: "1~feat-a", Head: "feat-a", Ref: "main..feat-a"},
+			{Label: "2~feature/ui", Head: "feature/ui", Ref: "feat-a..feature/ui"},
+		},
+	}
+	rows := m.reviewRows()
+	require.Len(t, rows, 2)
+	assert.Equal(t, overlay.InfoRow{Label: "stack 1~feat-a", Value: "feat-a", MutedSuffix: "main..feat-a"}, rows[0])
+	assert.Equal(t, overlay.InfoRow{Label: "stack 2~feature/ui", Value: "feature/ui", MutedSuffix: "feat-a..feature/ui"}, rows[1])
+}
+
+func TestCloneReviewInfoConfig_copiesStack(t *testing.T) {
+	src := &ReviewInfoConfig{Stack: []StackLevelInfo{{Label: "1~a", Head: "a", Ref: "main..a"}}}
+	got := cloneReviewInfoConfig(src)
+	require.Len(t, got.Stack, 1)
+
+	src.Stack[0].Head = "mutated"
+	assert.Equal(t, "a", got.Stack[0].Head, "clone must not alias the caller's slice")
+}

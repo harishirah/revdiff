@@ -206,6 +206,8 @@ func (m Model) reviewHeaderText() string {
 		return ""
 	}
 	switch {
+	case len(cfg.Stack) > 0:
+		return fmt.Sprintf("stack: %d PRs", len(cfg.Stack))
 	case cfg.Stdin:
 		if cfg.StdinName != "" {
 			return "stdin: " + cfg.StdinName
@@ -269,6 +271,13 @@ func (m Model) reviewRows() []overlay.InfoRow {
 		return nil
 	}
 	var rows []overlay.InfoRow
+	for _, lv := range cfg.Stack {
+		rows = append(rows, overlay.InfoRow{
+			Label:       "stack " + lv.Label,
+			Value:       lv.Head,
+			MutedSuffix: lv.Ref,
+		})
+	}
 	if f := m.reviewListFlag(cfg.Only); f != "" {
 		rows = append(rows, overlay.InfoRow{Label: "only", Value: f})
 	}

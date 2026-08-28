@@ -28,6 +28,21 @@ type reviewInfoInputs struct {
 	workDir     string
 	vcsType     diff.VCSType
 	description string
+	stackLabels []string // synthetic per-level prefixes; empty outside --stack-ref mode
+}
+
+// stackLevelInfo pairs the resolved level labels with their ref ranges for the
+// info popup. Returns nil outside stack mode, or when the label count does not
+// match the parsed levels (which would misattribute a branch to a label).
+func stackLevelInfo(opts options, labels []string) []ui.StackLevelInfo {
+	if len(labels) != len(opts.stackLevels) {
+		return nil
+	}
+	out := make([]ui.StackLevelInfo, 0, len(labels))
+	for i, lv := range opts.stackLevels {
+		out = append(out, ui.StackLevelInfo{Label: labels[i], Head: lv.head, Ref: lv.base + ".." + lv.head})
+	}
+	return out
 }
 
 // reviewInfoFromOptions builds the production *ReviewInfoConfig threaded into
@@ -62,6 +77,7 @@ func reviewInfoFromOptions(opts options, in reviewInfoInputs) *ui.ReviewInfoConf
 		Exclude:        append([]string(nil), opts.Exclude...),
 		Compact:        opts.Compact,
 		CompactContext: opts.CompactContext,
+		Stack:          stackLevelInfo(opts, in.stackLabels),
 	}
 }
 
