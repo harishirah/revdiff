@@ -144,6 +144,7 @@ The file picker lists paths currently visible in the sidebar, preserving annotat
 |-----|--------|
 | `a` or `Enter` (diff pane) | Annotate current diff line |
 | `V` | Select lines: move the cursor to extend, `a` annotates the selection as one range, `V` or `Esc` cancels |
+| `c` | Ask Claude about the selection, or the hunk under the cursor, in a side panel (requires `--ask`) |
 | `A` | Add file-level annotation (stored at top of diff) |
 | `@` | Toggle annotation list popup (navigate and jump to any annotation) |
 | `}` / `{` | Jump to next/previous annotation (always crosses file boundaries; silent no-op at the first/last annotation) |
@@ -339,3 +340,7 @@ Each history file contains:
 History auto-save is always on and silent — errors are logged to stderr, never fail the process. No history is saved on discard quit (`Q`) or when there are no annotations. For `--stdin` mode, files are saved under `stdin/` subdirectory; for `--only` without git, the parent directory name is used instead of a repo name.
 
 Override the history directory with `--history-dir`, `REVDIFF_HISTORY_DIR` env var, or `history-dir` in the config file.
+
+## Claude Side Panel
+
+With `--ask` (the plugin launcher sets it automatically when `claude` is installed), `c` asks Claude about the selection (`V`) or the hunk under the cursor. The answer streams into a read-only side panel; follow-ups continue the same conversation, and the `i` popup shows `claude --resume <id>`. `tab` focuses the panel, `esc` returns to the diff and then closes it. `--ask-bin` sets the `claude` executable, `--ask-model` the model, and `REVDIFF_ASK=0` opts out of the launcher default. Questions and answers are not returned as annotations.

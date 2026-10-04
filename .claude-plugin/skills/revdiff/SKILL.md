@@ -250,6 +250,8 @@ The resolver and launcher MUST run in the same bash invocation — the resolver 
 
 **Pane-scoped overlay (agterm)**: when running in an agterm split, `REVDIFF_AGTERM_PANE=1` opens revdiff in the agent's own pane instead of over the whole session, leaving the sibling pane live and visible. The user sets it in the environment; it is ignored outside a split. This is a launcher environment variable, not a revdiff flag.
 
+**Claude side panel**: when the `claude` CLI is installed, the launcher switches on revdiff's read-only Claude side panel (`REVDIFF_ASK=1`), so the user can press `V` to select lines and `c` to ask about them without leaving the review. Those questions and answers stay in the panel and never come back as annotations. The user opts out with `REVDIFF_ASK=0`. This is a launcher environment variable, not a flag you pass.
+
 The script:
 - Detects available terminal (agterm → tmux → Zellij → herdr → kitty → wezterm/Kaku → cmux → ghostty → iTerm2 → Emacs vterm)
 - Launches revdiff in an overlay

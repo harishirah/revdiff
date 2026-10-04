@@ -228,6 +228,16 @@ func run(opts options) (int, error) {
 		postFlushHook = hook
 	}
 
+	asker, err := setupAsker(opts, workDir, description)
+	if err != nil {
+		return 0, err
+	}
+	var uiAsker ui.Asker // stays a true nil when the panel is off
+	if asker != nil {
+		uiAsker = asker
+		defer asker.Close()
+	}
+
 	model, err := ui.NewModel(ui.ModelConfig{
 		Renderer:             renderer,
 		Store:                store,
@@ -284,6 +294,7 @@ func run(opts options) (int, error) {
 		AnnotationMarker: opts.AnnotationMarker,
 		OutputPath:       opts.Output,
 		StackLabels:      stackLabels,
+		Asker:            uiAsker,
 		NewFileTree: func(entries []diff.FileEntry) ui.FileTreeComponent {
 			if len(stackLabels) > 0 {
 				return sidepane.NewStackFileTree(entries, stackLabels)

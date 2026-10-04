@@ -63,6 +63,7 @@ const (
 	hitTree                  // tree pane (or TOC pane when mdTOC is active)
 	hitDiff                  // diff pane body (below the diff header)
 	hitStatus                // status bar row(s)
+	hitAsk                   // Claude side panel
 	hitHeader                // diff header row (file path) — currently a no-op zone
 )
 
@@ -121,6 +122,10 @@ func (m Model) hitTest(x, y int) hitZone {
 		return hitTree
 	}
 
+	if aw := m.askPanelWidth(); aw > 0 && x >= m.layout.width-aw-2 {
+		return hitAsk
+	}
+
 	if y == 0 {
 		return hitNone // diff pane top border — mirror of treeTopRow() guard above
 	}
@@ -157,6 +162,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	m.output.hint = ""
 	m.stack.hint = ""
 	m.sel.hint = ""
+	m.ask.hint = ""
 	m.compact.hint = ""
 	m.editorState.hint = ""
 
@@ -186,6 +192,9 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m.clickTree(msg.Y)
 		case hitDiff:
 			return m.clickDiff(msg.Y)
+		case hitAsk:
+			m.layout.focus = paneAsk
+			return m, nil
 		case hitNone, hitStatus, hitHeader:
 			return m, nil
 		}
@@ -255,6 +264,9 @@ func (m Model) wheelStepFor(shift bool) int {
 // fixes #179.
 func (m Model) handleWheel(zone hitZone, delta int) (tea.Model, tea.Cmd) {
 	switch zone {
+	case hitAsk:
+		m.scrollAsk(delta)
+		return m, nil
 	case hitDiff:
 		if !m.scrollDiffViewportBy(delta) {
 			return m, nil

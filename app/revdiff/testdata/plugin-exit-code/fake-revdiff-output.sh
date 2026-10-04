@@ -9,6 +9,10 @@ fi
 if [ -n "${FAKE_ENV_FILE:-}" ]; then
     printf '%s|%s' "${EDITOR:-missing}" "${VISUAL:-missing}" > "$FAKE_ENV_FILE"
 fi
+# records whether the launcher switched on the Claude side panel
+if [ -n "${FAKE_ASK_FILE:-}" ]; then
+    printf '%s|%s' "${REVDIFF_ASK:-missing}" "${REVDIFF_ASK_BIN:-missing}" > "$FAKE_ASK_FILE"
+fi
 if [ -n "${FAKE_STDERR:-}" ]; then
     printf "%s" "$FAKE_STDERR" >&2
 fi

@@ -278,6 +278,9 @@ func (m Model) reviewRows() []overlay.InfoRow {
 			MutedSuffix: lv.Ref,
 		})
 	}
+	if m.ask.asker != nil && m.ask.asked {
+		rows = append(rows, overlay.InfoRow{Label: "claude", Value: "claude --resume " + m.ask.asker.SessionID()})
+	}
 	if f := m.reviewListFlag(cfg.Only); f != "" {
 		rows = append(rows, overlay.InfoRow{Label: "only", Value: f})
 	}

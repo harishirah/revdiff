@@ -62,6 +62,7 @@
         <a href="#context-only">Context-only review</a>
         <a href="#scratch-buffer">Scratch-buffer review</a>
         <a href="#stacked-pr-review">Stacked PR review</a>
+        <a href="#claude-panel">Claude side panel</a>
         <a href="#description">Review description</a>
         <a href="#markdown-toc">Markdown TOC</a>
         <a href="#beyond-code-review">Beyond code review</a>
@@ -272,6 +273,11 @@ revdiff --all-files --exclude vendor --exclude mocks</code></div>
         <p>Use <code>)</code> and <code>(</code> to jump between PRs; the status bar shows the current position as <code>⇅ 2/3</code>, and the <code>i</code> info popup lists every level with its ref range.</p>
         <p><code>--stack-ref</code> is git only and mutually exclusive with refs, <code>--staged</code>, <code>--untracked</code>, <code>--only</code>, <code>--all-files</code>, <code>--stdin</code>, and <code>--compare-old</code>/<code>--compare-new</code>; <code>--include</code>, <code>--exclude</code>, and <code>--annotations</code> are allowed. Include and exclude prefixes match the real path (<code>app</code>), not the level label — to review part of a stack, pass fewer <code>--stack-ref</code> flags. Blame, the source editor, <code>--untracked</code>, and the commit-log section are unavailable in stack mode because the synthetic paths do not name real files on disk.</p>
 
+        <h2 id="claude-panel">Claude side panel</h2>
+        <p>Start revdiff with <code>--ask</code> (or set <code>ask = true</code> in the config) to get a Claude side panel for questions about the diff you are reading. Select lines with <code>V</code>, press <code>c</code>, and type a question; with no selection the question covers the hunk under the cursor. The answer streams into a panel to the right of the diff while you keep reviewing.</p>
+        <p>Each review is one conversation, so follow-up questions see the earlier answers, and the <code>i</code> info popup shows <code>claude --resume &lt;id&gt;</code> to continue it in a terminal later. The panel runs the <code>claude</code> CLI in plan mode with only read tools and read-only git commands allowed: it can look things up but never edits files. <code>tab</code> focuses the panel (<code>j</code>/<code>k</code>, page keys and the mouse wheel scroll it), <code>esc</code> returns to the diff, and <code>esc</code> again closes it.</p>
+        <p><code>--ask-bin</code> points at the <code>claude</code> executable and <code>--ask-model</code> picks the model. The Claude Code plugin's launcher switches the panel on automatically when <code>claude</code> is installed; set <code>REVDIFF_ASK=0</code> to opt out. Questions and answers stay in the panel; only annotations are returned when you quit.</p>
+
         <h2 id="two-file-diff">Two-file diff</h2>
         <p>Use <code>--compare-old=&lt;path&gt;</code> together with <code>--compare-new=&lt;path&gt;</code> to diff two arbitrary files on disk using <code>git diff --no-index</code>. No VCS repository is required &mdash; this works anywhere <code>git</code> is installed.</p>
         <div class="code-block"><code>revdiff --compare-old=/tmp/plan-old.md --compare-new=docs/plans/plan.md
@@ -452,6 +458,9 @@ revdiff --dump-config > ~/.config/revdiff/config</code></div>
                 <tr><td><code>-F, --only</code></td><td>Show only matching files</td><td></td></tr>
                 <tr><td><code>-o, --output</code></td><td>Write annotations to file</td><td></td></tr>
                 <tr><td><code>--post-flush-command</code></td><td>Run command after a successful <code>O</code> flush</td><td></td></tr>
+                <tr><td><code>--ask</code></td><td>Enable the Claude side panel</td><td><code>false</code></td></tr>
+                <tr><td><code>--ask-bin</code></td><td>Claude executable for the side panel</td><td><code>claude</code></td></tr>
+                <tr><td><code>--ask-model</code></td><td>Model for the Claude side panel</td><td></td></tr>
                 <tr><td><code>--annotations</code></td><td>Preload annotations from a markdown file in <code>-o</code> format</td><td></td></tr>
                 <tr><td><code>--history-dir</code></td><td>Directory for review history auto-saves</td><td><code>~/.config/revdiff/history/</code></td></tr>
                 <tr><td><code>--keys</code></td><td>Path to keybindings file</td><td><code>~/.config/revdiff/keybindings</code></td></tr>
@@ -567,6 +576,7 @@ color-border = #6272a4
             <tbody>
                 <tr><td><code>a</code> or <code>Enter</code></td><td>Annotate current line</td></tr>
                 <tr><td><code>V</code></td><td>Select lines: move the cursor to extend, <code>a</code> annotates the selection as one range, <code>V</code> or <code>Esc</code> cancels</td></tr>
+                <tr><td><code>c</code></td><td>Ask Claude about the selection, or the hunk under the cursor, in a side panel (requires <code>--ask</code>)</td></tr>
                 <tr><td><code>A</code></td><td>Add file-level annotation</td></tr>
                 <tr><td><code>@</code></td><td>Toggle annotation list popup</td></tr>
                 <tr><td><code>}</code> / <code>{</code></td><td>Jump to next/previous annotation (always crosses file boundaries; silent no-op at the first/last annotation)</td></tr>
@@ -684,7 +694,7 @@ map alt+t&gt;n theme_select</code></div>
         <p><strong>File/Hunk:</strong> <code>next_item</code>, <code>prev_item</code>, <code>jump_file</code>, <code>next_hunk</code>, <code>prev_hunk</code>, <code>open_file_in_editor</code></p>
         <p><strong>Pane:</strong> <code>toggle_pane</code>, <code>focus_tree</code>, <code>focus_diff</code></p>
         <p><strong>Search:</strong> <code>search</code></p>
-        <p><strong>Annotations:</strong> <code>confirm</code>, <code>annotate_file</code>, <code>delete_annotation</code>, <code>annot_list</code>, <code>open_editor</code>, <code>next_annotation</code>, <code>prev_annotation</code>, <code>flush_output</code>, <code>select_lines</code></p>
+        <p><strong>Annotations:</strong> <code>confirm</code>, <code>annotate_file</code>, <code>delete_annotation</code>, <code>annot_list</code>, <code>open_editor</code>, <code>next_annotation</code>, <code>prev_annotation</code>, <code>flush_output</code>, <code>select_lines</code>, <code>ask</code></p>
         <p><strong>View:</strong> <code>toggle_collapsed</code>, <code>toggle_compact</code>, <code>toggle_wrap</code>, <code>toggle_tree</code>, <code>toggle_line_numbers</code>, <code>toggle_blame</code>, <code>toggle_word_diff</code>, <code>toggle_hunk</code>, <code>toggle_untracked</code>, <code>mark_reviewed</code>, <code>filter_unreviewed</code>, <code>theme_select</code>, <code>filter</code>, <code>info</code>, <code>reload</code></p>
         <p><strong>Quit:</strong> <code>quit</code>, <code>discard_quit</code>, <code>help</code>, <code>dismiss</code></p>
 

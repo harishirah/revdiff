@@ -33,12 +33,7 @@ func (m Model) View() string {
 	// long filename causes lipgloss to soft-wrap the header onto multiple
 	// rows, which would push viewport rows past applyScrollbar's hardcoded
 	// diffScrollbarFirstViewportRow offset.
-	var diffPaneW int
-	if m.treePaneHidden() {
-		diffPaneW = m.layout.width - 2
-	} else {
-		diffPaneW = m.layout.width - m.layout.treeWidth - 4
-	}
+	diffPaneW := m.diffPaneWidth()
 
 	// diff pane title
 	diffTitle := "no file selected"
@@ -71,6 +66,10 @@ func (m Model) View() string {
 		annotated := m.annotatedFiles()
 		treeContent := m.tree.Render(sidepane.FileTreeRender{Width: m.layout.treeWidth, Height: ph, Annotated: annotated, Resolver: m.resolver, Renderer: m.renderer})
 		mainView = m.renderTwoPaneLayout(treeContent, diffContent, m.tree.ScrollState(), ph, diffPaneW)
+	}
+
+	if m.askPanelWidth() > 0 {
+		mainView = lipgloss.JoinHorizontal(lipgloss.Top, mainView, m.renderAskPanel(ph))
 	}
 
 	mainView = m.overlay.Compose(mainView, overlay.RenderCtx{Width: m.layout.width, Height: m.layout.height, Resolver: m.resolver})
@@ -153,6 +152,8 @@ func (m Model) transientHint() string {
 		return m.stack.hint
 	case m.sel.hint != "":
 		return m.sel.hint
+	case m.ask.hint != "":
+		return m.ask.hint
 	case m.compact.hint != "":
 		return m.compact.hint
 	case m.editorState.hint != "":
@@ -213,6 +214,9 @@ func (m Model) statusBarText() string {
 
 	// build right-side segments
 	var rightParts []string
+	if st := m.askStatus(); st != "" {
+		rightParts = append(rightParts, st)
+	}
 	if sel := m.selectionStatus(); sel != "" {
 		rightParts = append(rightParts, sel)
 	}

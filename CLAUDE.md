@@ -28,6 +28,7 @@ TUI for reviewing diffs, files, and documents with inline annotations, built wit
 - `app/editor/` - external `$EDITOR` invocation for multi-line annotations: temp-file lifecycle, editor resolution ($EDITOR → $VISUAL → vi), and `Command()` API returning `*exec.Cmd` + completion func for `tea.ExecProcess`. Consumed by `app/ui` via the `ExternalEditor` interface
 - `app/handoff/` - prepares user-configured post-flush shell commands. Annotation snapshots are provided on stdin; stdout is suppressed so helpers cannot overwrite the TUI. Consumed by `app/ui` via the `PostFlushHook` interface and `tea.ExecProcess`
 - `app/history/` - review session auto-save to `~/.config/revdiff/history/`
+- `app/ask/` - runs `claude -p` headless for the side panel: one session per review (`--session-id`, then `--resume`), plan mode plus a read-only tool list, stream-json text deltas forwarded as they arrive. Consumed by `app/ui` via the `Asker` interface
 - `app/fsutil/` - filesystem utilities
 - `app/ui/mocks/` - moq-generated mocks (never edit manually)
 

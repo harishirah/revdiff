@@ -34,6 +34,7 @@ Built for a specific use case: reviewing code changes, plans, and documents with
 - No-VCS file review: `--only` files outside a VCS repo (or not in any diff) are shown as context-only with full annotation support
 - Scratch-buffer review: annotate arbitrary piped or redirected text with `--stdin`, optionally naming it with `--stdin-name`. When the piped content sniffs as a git unified diff, revdiff parses it as a real multi-file diff (review `gh pr diff` or `git format-patch -1 --stdout` output directly); otherwise the input is shown as a single context-only buffer.
 - Stacked PR review: review an entire stack of GitHub PRs in one session with repeated `--stack-ref=BASE..HEAD`, moving between PRs with `)` / `(`. Paths are prefixed with a `<ordinal>~<branch>` label so annotations name the PR they belong to
+- Claude side panel: select lines with `V` and press `c` to ask Claude about them; the answer streams into a read-only side panel next to the diff (`--ask`)
 - Pi package: launch revdiff from pi, capture annotations, and send them to the agent immediately for the normal review loop
 - Review history: auto-saves annotations and diffs to `~/.config/revdiff/history/` on quit as a safety net
 - Fully customizable colors via environment variables, CLI flags, or config file
@@ -420,6 +421,9 @@ Positional arguments support several forms:
 | `-F`, `--only` | Show only matching files by exact path or suffix, may be repeated (e.g. `--only=model.go`) | |
 | `-o`, `--output` | Write annotations to file instead of stdout, env: `REVDIFF_OUTPUT` | |
 | `--post-flush-command` | Run command after a successful `O` flush, env: `REVDIFF_POST_FLUSH_COMMAND`, config: `post-flush-command` | |
+| `--ask` | Enable the Claude side panel, env: `REVDIFF_ASK`, config: `ask` | `false` |
+| `--ask-bin` | Claude executable for the side panel, env: `REVDIFF_ASK_BIN`, config: `ask-bin` | `claude` |
+| `--ask-model` | Model for the Claude side panel, env: `REVDIFF_ASK_MODEL`, config: `ask-model` | |
 | `--annotations` | Preload annotations from a markdown file in `-o` format | |
 | `--history-dir` | Directory for review history auto-saves, env: `REVDIFF_HISTORY_DIR` | `~/.config/revdiff/history/` |
 | `--config` | Path to config file, env: `REVDIFF_CONFIG` | `~/.config/revdiff/config` |
@@ -676,6 +680,17 @@ gh pr diff 123 | revdiff --stdin
 git format-patch -1 --stdout | revdiff --stdin
 ```
 
+### Claude Side Panel
+
+Start revdiff with `--ask` (or set `ask = true` in the config) to get a Claude side panel for questions about the diff you are reading. Select lines with `V`, press `c`, and type a question; with no selection the question covers the hunk under the cursor. The answer streams into a panel to the right of the diff while you keep reviewing.
+
+- One conversation per review: follow-up questions see the earlier answers. The `i` info popup shows `claude --resume <id>` to continue the conversation in a terminal later.
+- Read-only: the panel runs the `claude` CLI in plan mode with only read tools and read-only git commands allowed, so it can look things up but never edit files.
+- `tab` focuses the panel (`j`/`k`, page keys and the mouse wheel scroll it), `esc` returns to the diff, and `esc` again closes the panel.
+- `--ask-bin` points at the `claude` executable (default: `claude` on `PATH`) and `--ask-model` picks the model. The Claude Code plugin's launcher switches the panel on automatically when `claude` is installed; set `REVDIFF_ASK=0` to opt out.
+
+Questions and answers stay in the panel; only annotations are returned when you quit.
+
 ### Review Description
 
 Use `--description` (or `--description-file=path.md`) to attach prose context to a review. The text is rendered at the top of the info popup (`i` key), with the same markdown highlighting used for `.md` files in the diff view. Useful when an agent (or a script) launches revdiff on your behalf and you come back to it later — the popup tells you what the change is and why.
@@ -775,6 +790,7 @@ The file picker lists paths currently visible in the sidebar, so annotated-only 
 |-----|--------|
 | `a` or `Enter` (diff pane) | Annotate current diff line |
 | `V` | Select lines: move the cursor to extend, `a` annotates the selection as one range, `V` or `Esc` cancels |
+| `c` | Ask Claude about the selection, or the hunk under the cursor, in a side panel (requires `--ask`) |
 | `A` | Add file-level annotation (stored at top of diff) |
 | `@` | Toggle annotation list popup (navigate and jump to any annotation) |
 | `}` / `{` | Jump to next/previous annotation (always crosses file boundaries; silent no-op at the first/last annotation) |
@@ -942,7 +958,7 @@ When the leader is pressed, the status bar shows `Pending: ctrl+w, esc to cancel
 
 **Search:** `search`
 
-**Annotations:** `confirm` (annotate line / select file), `annotate_file`, `delete_annotation`, `annot_list`, `open_editor`, `next_annotation`, `prev_annotation`, `flush_output`, `select_lines`
+**Annotations:** `confirm` (annotate line / select file), `annotate_file`, `delete_annotation`, `annot_list`, `open_editor`, `next_annotation`, `prev_annotation`, `flush_output`, `select_lines`, `ask`
 
 **View:** `toggle_collapsed`, `toggle_compact`, `toggle_wrap`, `toggle_tree`, `toggle_line_numbers`, `toggle_blame`, `toggle_word_diff`, `toggle_hunk`, `toggle_untracked`, `mark_reviewed`, `filter_unreviewed`, `theme_select`, `filter`, `info`, `reload`
 

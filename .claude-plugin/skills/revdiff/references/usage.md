@@ -151,6 +151,7 @@ The file picker lists paths currently visible in the sidebar, preserving annotat
 |-----|--------|
 | `a` or `Enter` (diff pane) | Annotate current diff line |
 | `V` | Select lines: move the cursor to extend, `a` annotates the selection as one range, `V` or `Esc` cancels |
+| `c` | Ask Claude about the selection, or the hunk under the cursor, in a side panel (requires `--ask`) |
 | `A` | Add file-level annotation (stored at top of diff) |
 | `@` | Toggle annotation list popup (navigate and jump to any annotation) |
 | `}` / `{` | Jump to next/previous annotation (always crosses file boundaries; silent no-op at the first/last annotation) |
@@ -376,3 +377,7 @@ revdiff --stack-ref=main..feat-auth --stack-ref=feat-auth..feat-ui --stack-ref=f
 - `--include` / `--exclude` match the **real** path (`app`, `vendor`), not the level label. To review part of a stack, pass fewer `--stack-ref` flags
 - Blame (`B`), the source editor (`e`), `--untracked` and the commit-log section are unavailable in stack mode, because the synthetic paths do not name real files
 - The review-history entry records the annotations but no diff block
+
+## Claude Side Panel
+
+With `--ask` (the plugin launcher sets it automatically when `claude` is installed), `c` asks Claude about the selection (`V`) or the hunk under the cursor. The answer streams into a read-only side panel; follow-ups continue the same conversation, and the `i` popup shows `claude --resume <id>`. `tab` focuses the panel, `esc` returns to the diff and then closes it. `--ask-bin` sets the `claude` executable, `--ask-model` the model, and `REVDIFF_ASK=0` opts out of the launcher default. Questions and answers are not returned as annotations.

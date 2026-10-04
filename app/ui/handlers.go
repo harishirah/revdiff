@@ -185,6 +185,10 @@ func (m Model) handleEscKey() (tea.Model, tea.Cmd) {
 	if len(m.search.matches) > 0 {
 		m.clearSearch()
 		m.layout.viewport.SetContent(m.renderDiff())
+		return m, nil
+	}
+	if m.ask.visible {
+		m.showAskPanel(false)
 	}
 	return m, nil
 }

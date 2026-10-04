@@ -284,6 +284,7 @@ type pane int
 const (
 	paneTree pane = iota
 	paneDiff
+	paneAsk // the Claude side panel
 
 	minTreeWidth = 20
 )
@@ -606,6 +607,7 @@ type Model struct {
 	output      outputState       // transient hint state for the O in-session output flush
 	stack       stackState        // per-level labels and transient hint for --stack-ref reviews
 	sel         selectionState    // line-range selection in the diff pane
+	ask         askState          // Claude side panel: transcript, question input, answer in flight
 	keys        keyState          // chord-pending state and transient hint for leader-chord keybindings
 	vim         vimState          // count accumulator, pending letter leader, and transient hint for vim-motion preset
 	wheel       wheelState        // diff-pane mouse wheel coalescing (debounced render via wheelDebounceMsg)
@@ -820,6 +822,9 @@ type ModelConfig struct {
 	// in stack order. Empty for every other mode; the stack navigation actions
 	// and the status-bar indicator are inert without it.
 	StackLabels []string
+
+	// Asker answers side-panel questions about the diff. nil turns the panel off.
+	Asker Asker
 }
 
 // NewModel creates a new Model from the given configuration. All dependencies
@@ -967,6 +972,7 @@ func NewModel(cfg ModelConfig) (Model, error) {
 		},
 		reviewed:             reviewedState{cache: make(map[string]string), pending: make(map[string]uint64)},
 		stack:                stackState{labels: append([]string(nil), cfg.StackLabels...)},
+		ask:                  askState{asker: cfg.Asker},
 		reload:               reloadState{applicable: cfg.ReloadApplicable},
 		compact:              compactState{applicable: cfg.CompactApplicable},
 		annot:                annotationState{rowCache: make(map[annotCacheKey][]string)},
@@ -1021,6 +1027,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleBlameLoaded(msg)
 	case editorFinishedMsg:
 		return m.handleEditorFinished(msg)
+	case askChunkMsg:
+		return m.handleAskChunk(msg)
+	case askDoneMsg:
+		return m.handleAskDone(msg)
 	case sourceEditorFinishedMsg:
 		return m.handleSourceEditorFinished(msg)
 	case postFlushFinishedMsg:
@@ -1059,6 +1069,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.output.hint = ""
 	m.stack.hint = ""
 	m.sel.hint = ""
+	m.ask.hint = ""
 	m.compact.hint = ""
 	m.editorState.hint = ""
 	m.keys.hint = ""
@@ -1124,6 +1135,11 @@ func (m Model) dispatchAction(action keymap.Action) (tea.Model, tea.Cmd) {
 	if model, cmd, ok := m.handleOverlayOpen(action); ok {
 		return model, cmd
 	}
+	if m.layout.focus == paneAsk {
+		if model, cmd, ok := m.handleAskPaneAction(action); ok {
+			return model, cmd
+		}
+	}
 
 	switch action {
 	case keymap.ActionDismiss:
@@ -1160,6 +1176,8 @@ func (m Model) dispatchAction(action keymap.Action) (tea.Model, tea.Cmd) {
 		return m.handleStackNav(action == keymap.ActionNextStackLevel)
 	case keymap.ActionSelectLines:
 		return m.handleSelectToggle()
+	case keymap.ActionAsk:
+		return m.handleAskKey()
 	case keymap.ActionReload:
 		return m.handleReload()
 	case keymap.ActionFlushOutput:
@@ -1311,6 +1329,11 @@ func (m Model) handleModalKey(msg tea.KeyMsg) (bool, tea.Model, tea.Cmd) {
 		return true, model, cmd
 	}
 
+	if m.ask.inputting {
+		model, cmd := m.handleAskInputKey(msg)
+		return true, model, cmd
+	}
+
 	// overlay popup dispatch (help, annotation list, theme selector)
 	if m.overlay.Active() {
 		action := m.keymap.Resolve(msg.String())
@@ -1351,6 +1374,15 @@ func (m Model) isCursorLine(idx int) bool {
 // only switches to diff pane when a file is loaded.
 // no-op in single-file mode unless mdTOC is active (TOC uses paneTree slot).
 func (m *Model) togglePane() {
+	// with the Claude panel open, focus cycles tree → diff → panel
+	if m.askPanelWidth() > 0 && m.layout.focus == paneDiff {
+		m.layout.focus = paneAsk
+		return
+	}
+	if m.layout.focus == paneAsk && m.treePaneHidden() {
+		m.layout.focus = paneDiff
+		return
+	}
 	if m.treePaneHidden() {
 		return
 	}
@@ -1374,11 +1406,10 @@ func (m *Model) toggleTreePane() {
 	if m.layout.treeHidden {
 		m.layout.treeWidth = 0
 		m.layout.focus = paneDiff
-		m.layout.viewport.Width = m.layout.width - 2
 	} else {
 		m.layout.treeWidth = max(minTreeWidth, m.layout.width*m.cfg.treeWidthRatio/10)
-		m.layout.viewport.Width = m.layout.width - m.layout.treeWidth - 4
 	}
+	m.layout.viewport.Width = m.diffPaneWidth()
 	m.layout.viewport.Height = m.paneHeight() - 1
 	m.syncViewportToCursor()
 }
@@ -1518,16 +1549,14 @@ func (m Model) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.layout.width = msg.Width
 	m.layout.height = msg.Height
 
-	var diffWidth int
 	if m.treePaneHidden() {
 		m.layout.treeWidth = 0
-		diffWidth = m.layout.width - 2 // diff pane borders only
 	} else {
 		// adjust tree width based on ratio (N out of 10 units);
 		// applies to multi-file mode and single-file markdown with TOC
 		m.layout.treeWidth = max(minTreeWidth, m.layout.width*m.cfg.treeWidthRatio/10)
-		diffWidth = m.layout.width - m.layout.treeWidth - 4 // borders
 	}
+	diffWidth := m.diffPaneWidth()
 	diffHeight := m.paneHeight() - 1 // pane height minus diff header
 
 	if !m.ready {

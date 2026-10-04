@@ -27,6 +27,7 @@
 //   - filepicker.go — file picker open and selected-path jump integration
 //   - search.go — incremental search: input handling, match computation, navigation
 //   - selection.go — line-range selection (V): range tracking, gutter marker, annotation range mapping
+//   - askpanel.go — Claude side panel (c): question input, streamed answers via the Asker interface, layout share
 //
 // Model mutable state is organized into explicit sub-structs by concern:
 //

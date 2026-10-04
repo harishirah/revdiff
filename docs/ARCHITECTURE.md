@@ -163,6 +163,10 @@ across files by concern to keep files under ~500 lines:
 - **`selection.go`** — line-range selection (`V`): the range runs from the anchor to the cursor, a
   gutter marker paints it, and `a` maps it to one annotation range in a single number space (old
   numbers for an all-removed selection, new numbers otherwise)
+- **`askpanel.go`** — the Claude side panel (`c`): builds the question from the selection or the hunk
+  under the cursor, streams the answer through the consumer-side `Asker` interface (implemented by
+  `app/ask`, which runs `claude -p` read-only with one session per review), and owns the panel's
+  column: `diffPaneWidth` is the single source of the diff pane width once the panel takes its share
 - **`mouse.go`** — mouse event routing: `handleMouse` dispatch, `hitTest` pane classification
   (`hitZone`), wheel/left-click helpers (`clickTree`, `clickDiff`), layout helpers
   (`statusBarHeight`, `diffTopRow`, `treeTopRow`). Diff-pane wheel events defer both the cursor pin

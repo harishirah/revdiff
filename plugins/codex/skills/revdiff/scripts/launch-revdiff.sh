@@ -30,7 +30,14 @@ if [ -n "${REVDIFF_CONFIG:-}" ] && [ -f "$REVDIFF_CONFIG" ]; then
 fi
 # pass exit-code-on-annotations via env, not a CLI flag: an old revdiff binary
 # silently ignores an unknown env var but hard-fails on an unknown flag
-REVDIFF_CMD="REVDIFF_EXIT_CODE_ON_ANNOTATIONS=true $REVDIFF_CMD $(sq "--output=$OUTPUT_FILE")"
+# the Claude side panel is switched on the same way when claude is installed;
+# it is resolved to an absolute path because overlay shells may not inherit
+# PATH. REVDIFF_ASK=0 in the caller's environment opts out.
+ASK_ENV=""
+if [ "${REVDIFF_ASK:-}" != "0" ] && CLAUDE_BIN=$(command -v claude 2>/dev/null) && [ -n "$CLAUDE_BIN" ]; then
+    ASK_ENV="REVDIFF_ASK=true REVDIFF_ASK_BIN=$(sq "$CLAUDE_BIN") "
+fi
+REVDIFF_CMD="${ASK_ENV}REVDIFF_EXIT_CODE_ON_ANNOTATIONS=true $REVDIFF_CMD $(sq "--output=$OUTPUT_FILE")"
 for arg in "$@"; do
     REVDIFF_CMD="$REVDIFF_CMD $(sq "$arg")"
 done

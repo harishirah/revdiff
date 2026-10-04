@@ -490,7 +490,7 @@ func (m Model) handleFilesLoaded(msg filesLoadedMsg) (tea.Model, tea.Cmd) {
 		m.layout.focus = paneDiff
 		m.layout.treeWidth = 0
 		if m.ready {
-			m.layout.viewport.Width = m.layout.width - 2
+			m.layout.viewport.Width = m.diffPaneWidth()
 		}
 	}
 
@@ -569,10 +569,10 @@ func (m Model) handleFileLoaded(msg fileLoadedMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case m.file.mdTOC != nil && !m.layout.treeHidden:
 		m.layout.treeWidth = max(minTreeWidth, m.layout.width*m.cfg.treeWidthRatio/10)
-		m.layout.viewport.Width = m.layout.width - m.layout.treeWidth - 4
+		m.layout.viewport.Width = m.diffPaneWidth()
 	case m.file.singleFile || m.layout.treeHidden:
 		m.layout.treeWidth = 0
-		m.layout.viewport.Width = m.layout.width - 2
+		m.layout.viewport.Width = m.diffPaneWidth()
 	}
 
 	m.skipInitialDividers()

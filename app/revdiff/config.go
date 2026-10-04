@@ -58,6 +58,9 @@ type options struct {
 	HistoryDir            string   `long:"history-dir" ini-name:"history-dir" env:"REVDIFF_HISTORY_DIR" description:"directory for review history auto-saves"`
 	Output                string   `long:"output" short:"o" env:"REVDIFF_OUTPUT" no-ini:"true" description:"write annotations to file instead of stdout"`
 	PostFlushCommand      string   `long:"post-flush-command" ini-name:"post-flush-command" env:"REVDIFF_POST_FLUSH_COMMAND" description:"run command after a successful O flush"`
+	Ask                   bool     `long:"ask" ini-name:"ask" env:"REVDIFF_ASK" description:"enable the Claude side panel"`
+	AskBin                string   `long:"ask-bin" ini-name:"ask-bin" env:"REVDIFF_ASK_BIN" default:"claude" description:"claude executable for the side panel"`
+	AskModel              string   `long:"ask-model" ini-name:"ask-model" env:"REVDIFF_ASK_MODEL" description:"model for the Claude side panel"`
 	Keys                  string   `long:"keys" env:"REVDIFF_KEYS" no-ini:"true" description:"path to keybindings file"`
 	DumpKeys              bool     `long:"dump-keys" no-ini:"true" description:"print effective keybindings to stdout and exit"`
 	Theme                 string   `long:"theme" ini-name:"theme" env:"REVDIFF_THEME" description:"load theme from themes directory"`
