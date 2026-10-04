@@ -151,8 +151,8 @@ Stack mode is **git only** and requires the `gh` CLI, authenticated.
 It emits flat `key: value` lines. Read `stack_ok` first:
 
 - `stack_ok: true` — use `level_N_ref` for each level, in ascending N (bottom-of-stack first).
-- `stack_ok: false` — report `error:` verbatim; it is written to be actionable (gh missing, not authenticated, branch not checked out locally). Do not work around it silently.
-- `needs_ask: true` with `fork_at:` set — two open PRs share a base, so the stack is not linear. Ask the user which branch of the fork to review using the names in `fork_candidates`, then re-run scoped to their answer.
+- `stack_ok: false` — report `error:` verbatim; it is written to be actionable (gh missing, not authenticated, branches not checked out locally). When branches are missing it names all of them with the one `git fetch` command that creates them; offer to run it, then re-run detection. Do not work around it silently.
+- `needs_ask: true` with `fork_at:` set — two open PRs share a base, so the stack is not linear. Ask the user which branch of the fork to review using the names in `fork_candidates`, then re-run `detect-stack.sh` with the chosen branch as its only argument; the walk then follows that line of the stack to its top.
 
 Keep the whole table. The mapping from **level ordinal → branch** is what routes fixes later, and you already have it here.
 

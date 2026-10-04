@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 # detect-stack.sh - GitHub PR stack detection for the revdiff skill.
-# discovers the chain of stacked pull requests containing the current branch by
-# following each PR's base branch, and emits the ref ranges revdiff needs.
+# discovers the chain of stacked pull requests containing a branch by following
+# each PR's base branch, and emits the ref ranges revdiff needs.
+#
+# usage: detect-stack.sh [branch]
+#   branch: start from this branch instead of the checked-out one. used to
+#           re-scope after a fork: pass the fork candidate the user picked.
+#
+# PRs are looked up one branch at a time with gh's server-side --head/--base
+# filters, so detection does not depend on how many open PRs the repository
+# has. listing open PRs and filtering locally misses the stack as soon as the
+# repository has more open PRs than the list limit.
 #
 # git only: a stack is a chain of branches, and the PR metadata comes from the
 # gh CLI. requires gh to be installed and authenticated.
@@ -10,6 +19,7 @@
 #   vcs: git, or empty when the repo is not git
 #   stack_ok: true/false (whether a usable stack was found)
 #   current_branch: branch checked out now
+#   start_branch: branch the walk started from (the argument, else current_branch)
 #   trunk: the branch the bottom PR targets (e.g. main)
 #   stack_len: number of levels
 #   current_level: 1-based position of current_branch in the stack, empty if absent
@@ -35,6 +45,7 @@ set -euo pipefail
 vcs=""
 stack_ok="false"
 current_branch=""
+start_branch=""
 trunk=""
 stack_len="0"
 current_level=""
@@ -54,6 +65,7 @@ emit() {
     echo "vcs: $vcs"
     echo "stack_ok: $stack_ok"
     echo "current_branch: $current_branch"
+    echo "start_branch: $start_branch"
     echo "trunk: $trunk"
     echo "stack_len: $stack_len"
     local i n
@@ -97,6 +109,7 @@ if ! command -v git >/dev/null 2>&1 || ! git rev-parse --git-dir >/dev/null 2>&1
 fi
 vcs="git"
 current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+start_branch="${1:-$current_branch}"
 
 if ! command -v gh >/dev/null 2>&1; then
     fail "gh CLI not found (install: https://cli.github.com)"
@@ -104,62 +117,54 @@ fi
 if ! gh auth status >/dev/null 2>&1; then
     fail "gh not authenticated (run: gh auth login)"
 fi
+if ! git show-ref --verify --quiet "refs/heads/$start_branch" 2>/dev/null; then
+    fail "branch $start_branch not present locally (run: git fetch origin $start_branch:$start_branch)"
+fi
 
-# one API call; gh bundles gojq so no jq dependency. tab-separated because a PR
+# PRs from forks are skipped: a stack level must be a branch of this repository,
+# and a fork's PR can share a head name with a local branch it has nothing to do
+# with. gh bundles gojq, so --jq needs no jq install. tab-separated because a PR
 # title may contain anything except a tab or newline after sanitizing.
-pr_data=""
-if ! pr_data=$(gh pr list --state open --limit 100 \
-    --json number,title,headRefName,baseRefName,url \
-    --jq '.[] | [.headRefName, .baseRefName, .number, .url, .title] | @tsv' 2>/dev/null); then
-    fail "gh pr list failed (not a GitHub remote, or no access)"
-fi
-if [ -z "$pr_data" ]; then
-    fail "no open pull requests found"
-fi
 
-# index the PR list by head branch and count how many PRs target each base, so
-# a fork (two PRs sharing a base) can be reported rather than silently picked
-declare -a all_heads=() all_bases=() all_prs=() all_urls=() all_titles=()
-while IFS=$'\t' read -r h b n u t; do
-    [ -z "$h" ] && continue
-    all_heads+=("$h")
-    all_bases+=("$b")
-    all_prs+=("$n")
-    all_urls+=("$u")
-    all_titles+=("$(sanitize "$t")")
-done <<<"$pr_data"
-
-# index_of_head <branch> -> echoes index, or empty
-index_of_head() {
-    local want="$1" i
-    for ((i = 0; i < ${#all_heads[@]}; i++)); do
-        if [ "${all_heads[$i]}" = "$want" ]; then
-            echo "$i"
-            return 0
-        fi
-    done
-    return 1
+# pr_for_head <branch>: sets pr_base, pr_number, pr_url, pr_title from the open
+# PR whose head is <branch>; returns 1 when there is none. must not run in a
+# subshell: fail has to exit the script, not the subshell.
+pr_for_head() {
+    local out
+    if ! out=$(gh pr list --state open --head "$1" --limit 10 \
+        --json number,title,baseRefName,url,isCrossRepository \
+        --jq '[.[] | select(.isCrossRepository | not)] | first // empty | [.baseRefName, .number, .url, .title] | @tsv' 2>/dev/null); then
+        fail "gh pr list failed (not a GitHub remote, or no access)"
+    fi
+    [ -z "$out" ] && return 1
+    IFS=$'\t' read -r pr_base pr_number pr_url pr_title <<<"$out"
+    pr_title=$(sanitize "$pr_title")
 }
 
-# children_of <branch> -> echoes space-separated heads of PRs targeting it
-children_of() {
-    local want="$1" i out=""
-    for ((i = 0; i < ${#all_heads[@]}; i++)); do
-        if [ "${all_bases[$i]}" = "$want" ]; then
-            out="$out ${all_heads[$i]}"
-        fi
-    done
-    echo "${out# }"
+# prs_for_base <branch>: fills the kid_* arrays from the open PRs targeting
+# <branch>. same subshell caveat as pr_for_head.
+prs_for_base() {
+    local out h n u t
+    kid_heads=()
+    kid_prs=()
+    kid_urls=()
+    kid_titles=()
+    if ! out=$(gh pr list --state open --base "$1" --limit 20 \
+        --json number,title,headRefName,url,isCrossRepository \
+        --jq '.[] | select(.isCrossRepository | not) | [.headRefName, .number, .url, .title] | @tsv' 2>/dev/null); then
+        fail "gh pr list failed (not a GitHub remote, or no access)"
+    fi
+    while IFS=$'\t' read -r h n u t; do
+        [ -z "$h" ] && continue
+        kid_heads+=("$h")
+        kid_prs+=("$n")
+        kid_urls+=("$u")
+        kid_titles+=("$(sanitize "$t")")
+    done <<<"$out"
 }
 
-if ! index_of_head "$current_branch" >/dev/null 2>&1 && [ -z "$(children_of "$current_branch")" ]; then
-    fail "no open PR found for branch $current_branch"
-fi
-
-# walk DOWN from the current branch to the trunk, collecting ancestors.
-# visited guards against a base cycle, which gh will happily report.
-declare -a chain=()
-declare -a visited=()
+# visited guards against a base cycle, which gh will happily report
+visited=()
 seen() {
     local want="$1" v
     for v in ${visited[@]+"${visited[@]}"}; do
@@ -168,53 +173,55 @@ seen() {
     return 1
 }
 
-cur="$current_branch"
-while idx=$(index_of_head "$cur" 2>/dev/null); do
+# walk DOWN from the start branch to the trunk: each PR's base is the level
+# below it, and the first base with no open PR of its own is the trunk
+cur="$start_branch"
+while pr_for_head "$cur"; do
     if seen "$cur"; then
         fail "PR base cycle detected at $cur"
     fi
     visited+=("$cur")
-    chain=("$idx" ${chain[@]+"${chain[@]}"}) # prepend: bottom-most ends up first
-    cur="${all_bases[$idx]}"
+    # prepend: bottom-most ends up first
+    heads=("$cur" ${heads[@]+"${heads[@]}"})
+    bases=("$pr_base" ${bases[@]+"${bases[@]}"})
+    prs=("$pr_number" ${prs[@]+"${prs[@]}"})
+    urls=("$pr_url" ${urls[@]+"${urls[@]}"})
+    titles=("$pr_title" ${titles[@]+"${titles[@]}"})
+    cur="$pr_base"
 done
 trunk="$cur"
 
-# walk UP from the current branch through descendants; stop at a fork so the
+if [ "${#heads[@]}" -eq 0 ]; then
+    trunk=""
+    fail "no open PR found for branch $start_branch"
+fi
+
+# walk UP from the start branch through descendants; stop at a fork so the
 # skill can ask which line of the stack to review
-top="$current_branch"
+top="$start_branch"
 while true; do
-    kids=$(children_of "$top")
-    [ -z "$kids" ] && break
-    # shellcheck disable=SC2206  # deliberate word splitting on the space-joined list
-    kid_arr=($kids)
-    if [ "${#kid_arr[@]}" -gt 1 ]; then
+    prs_for_base "$top"
+    [ "${#kid_heads[@]}" -eq 0 ] && break
+    if [ "${#kid_heads[@]}" -gt 1 ]; then
         fork_at="$top"
-        fork_candidates=$(printf '%s,' "${kid_arr[@]}")
+        fork_candidates=$(printf '%s,' "${kid_heads[@]}")
         fork_candidates="${fork_candidates%,}"
         needs_ask="true"
         break
     fi
-    if seen "${kid_arr[0]}"; then
-        fail "PR base cycle detected at ${kid_arr[0]}"
+    if seen "${kid_heads[0]}"; then
+        fail "PR base cycle detected at ${kid_heads[0]}"
     fi
-    visited+=("${kid_arr[0]}")
-    kidx=$(index_of_head "${kid_arr[0]}")
-    chain+=("$kidx")
-    top="${kid_arr[0]}"
-done
-
-for idx in ${chain[@]+"${chain[@]}"}; do
-    heads+=("${all_heads[$idx]}")
-    bases+=("${all_bases[$idx]}")
-    prs+=("${all_prs[$idx]}")
-    urls+=("${all_urls[$idx]}")
-    titles+=("${all_titles[$idx]}")
+    visited+=("${kid_heads[0]}")
+    heads+=("${kid_heads[0]}")
+    bases+=("$top")
+    prs+=("${kid_prs[0]}")
+    urls+=("${kid_urls[0]}")
+    titles+=("${kid_titles[0]}")
+    top="${kid_heads[0]}"
 done
 
 stack_len="${#heads[@]}"
-if [ "$stack_len" -eq 0 ]; then
-    fail "no open PR found for branch $current_branch"
-fi
 
 for ((i = 0; i < ${#heads[@]}; i++)); do
     if [ "${heads[$i]}" = "$current_branch" ]; then
@@ -223,16 +230,21 @@ for ((i = 0; i < ${#heads[@]}; i++)); do
 done
 
 # every head and the trunk must exist locally: revdiff diffs local branch
-# ranges, and the agent later checks them out to apply fixes
-missing=""
-for h in ${heads[@]+"${heads[@]}"}; do
-    git show-ref --verify --quiet "refs/heads/$h" 2>/dev/null || missing="$h"
-done
+# ranges, and the agent later checks them out to apply fixes. all missing heads
+# are reported at once, so one fetch fixes a stack that was never checked out.
 if ! git show-ref --verify --quiet "refs/heads/$trunk" 2>/dev/null; then
     fail "base branch $trunk not present locally (run: git fetch origin $trunk:$trunk)"
 fi
+missing=""
+refspecs=""
+for h in ${heads[@]+"${heads[@]}"}; do
+    if ! git show-ref --verify --quiet "refs/heads/$h" 2>/dev/null; then
+        missing="${missing:+$missing, }$h"
+        refspecs="$refspecs $h:$h"
+    fi
+done
 if [ -n "$missing" ]; then
-    fail "branch $missing not present locally (run: git fetch && git switch $missing)"
+    fail "branches not present locally: $missing (run: git fetch origin$refspecs)"
 fi
 
 stack_ok="true"
