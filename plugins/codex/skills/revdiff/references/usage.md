@@ -143,6 +143,7 @@ The file picker lists paths currently visible in the sidebar, preserving annotat
 | Key | Action |
 |-----|--------|
 | `a` or `Enter` (diff pane) | Annotate current diff line |
+| `V` | Select lines: move the cursor to extend, `a` annotates the selection as one range, `V` or `Esc` cancels |
 | `A` | Add file-level annotation (stored at top of diff) |
 | `@` | Toggle annotation list popup (navigate and jump to any annotation) |
 | `}` / `{` | Jump to next/previous annotation (always crosses file boundaries; silent no-op at the first/last annotation) |

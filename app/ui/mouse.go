@@ -156,6 +156,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	m.reload.hint = ""
 	m.output.hint = ""
 	m.stack.hint = ""
+	m.sel.hint = ""
 	m.compact.hint = ""
 	m.editorState.hint = ""
 

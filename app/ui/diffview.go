@@ -426,7 +426,7 @@ func (m Model) renderDiffLine(b *strings.Builder, idx int, dl diff.DiffLine) {
 
 	// wrap mode: break long lines at word boundaries (dividers are short, skip them)
 	if m.modes.wrap && dl.ChangeType != diff.ChangeDivider {
-		m.renderWrappedDiffLine(b, dl, textContent, hasHighlight, isCursor, isSearchMatch)
+		m.renderWrappedDiffLine(b, idx, dl, textContent, hasHighlight, isCursor, isSearchMatch)
 		return
 	}
 
@@ -449,15 +449,12 @@ func (m Model) renderDiffLine(b *strings.Builder, idx int, dl diff.DiffLine) {
 	}
 	content = m.extendLineBg(content, lineBg)
 
-	cursor := " "
-	if isCursor {
-		cursor = m.renderer.DiffCursor(m.cfg.noColors)
-	}
+	cursor := m.gutterCell(idx, isCursor)
 	b.WriteString(cursor + numGutter + blGutter + content + "\n")
 }
 
 // renderWrappedDiffLine renders a diff line with word wrapping, producing continuation lines with ↪ markers.
-func (m Model) renderWrappedDiffLine(b *strings.Builder, dl diff.DiffLine, textContent string, hasHighlight, isCursor, isSearchMatch bool) {
+func (m Model) renderWrappedDiffLine(b *strings.Builder, idx int, dl diff.DiffLine, textContent string, hasHighlight, isCursor, isSearchMatch bool) {
 	numGutter, blGutter := m.lineGutters(dl)
 	numBlank, blBlank := m.gutterBlanks()
 
@@ -480,10 +477,7 @@ func (m Model) renderWrappedDiffLine(b *strings.Builder, dl diff.DiffLine, textC
 		}
 		styled = m.extendLineBg(styled, m.resolver.LineBg(dl.ChangeType))
 
-		cursor := " "
-		if i == 0 && isCursor {
-			cursor = m.renderer.DiffCursor(m.cfg.noColors)
-		}
+		cursor := m.gutterCell(idx, i == 0 && isCursor)
 		b.WriteString(cursor + ng + bg + styled + "\n")
 	}
 }

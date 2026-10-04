@@ -170,7 +170,7 @@ func (m Model) renderCollapsedAddLine(b *strings.Builder, idx int, dl diff.DiffL
 	// wrap mode: break long lines at word boundaries with continuation markers
 	if m.modes.wrap {
 		m.renderWrappedCollapsedLine(b, textContent, wrappedLineCtx{
-			gutter: gutter, numGutter: numGutter, blGutter: blGutter,
+			idx: idx, gutter: gutter, numGutter: numGutter, blGutter: blGutter,
 			isCursor: isCursor, hasHighlight: hasHighlight,
 			isSearchMatch: isSearchMatch,
 			lineStyle:     lineStyle, hlStyle: lineHlStyle, bgColor: bgColor,
@@ -186,16 +186,14 @@ func (m Model) renderCollapsedAddLine(b *strings.Builder, idx int, dl diff.DiffL
 	content = m.applyHorizontalScroll(content, bgColor)
 	content = m.extendLineBg(content, bgColor)
 
-	cursor := " "
-	if isCursor {
-		cursor = m.renderer.DiffCursor(m.cfg.noColors)
-	}
+	cursor := m.gutterCell(idx, isCursor)
 	b.WriteString(cursor + numGutter + blGutter + content + "\n")
 }
 
 // wrappedLineCtx holds rendering context for a wrapped collapsed line,
 // reducing the parameter count of renderWrappedCollapsedLine.
 type wrappedLineCtx struct {
+	idx                         int // diff-line index, for the selection marker
 	gutter, numGutter, blGutter string
 	isCursor, hasHighlight      bool
 	isSearchMatch               bool // true when the row is search-matched; drives no-colors marker fallback
@@ -219,10 +217,7 @@ func (m Model) renderWrappedCollapsedLine(b *strings.Builder, textContent string
 		styled := m.styleCollapsedWrapVisual(ctx, vl, isFirst)
 		styled = m.extendLineBg(styled, ctx.bgColor)
 
-		cursor := " "
-		if isFirst && ctx.isCursor {
-			cursor = m.renderer.DiffCursor(m.cfg.noColors)
-		}
+		cursor := m.gutterCell(ctx.idx, isFirst && ctx.isCursor)
 		b.WriteString(cursor + ng + bg + styled + "\n")
 	}
 }
@@ -313,10 +308,7 @@ func (m Model) renderDeletePlaceholder(b *strings.Builder, idx, hunkStart int) {
 			}
 			styled = m.extendLineBg(styled, bgColor)
 
-			cursor := " "
-			if i == 0 && isCursor {
-				cursor = m.renderer.DiffCursor(m.cfg.noColors)
-			}
+			cursor := m.gutterCell(idx, i == 0 && isCursor)
 			b.WriteString(cursor + ng + bg + styled + "\n")
 		}
 		return
@@ -326,10 +318,7 @@ func (m Model) renderDeletePlaceholder(b *strings.Builder, idx, hunkStart int) {
 	content = m.applyHorizontalScroll(content, bgColor)
 	content = m.extendLineBg(content, bgColor)
 
-	cursor := " "
-	if isCursor {
-		cursor = m.renderer.DiffCursor(m.cfg.noColors)
-	}
+	cursor := m.gutterCell(idx, isCursor)
 	b.WriteString(cursor + numGutter + blGutter + content + "\n")
 }
 

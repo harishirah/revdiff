@@ -151,6 +151,8 @@ func (m Model) transientHint() string {
 		return m.output.hint
 	case m.stack.hint != "":
 		return m.stack.hint
+	case m.sel.hint != "":
+		return m.sel.hint
 	case m.compact.hint != "":
 		return m.compact.hint
 	case m.editorState.hint != "":
@@ -211,6 +213,9 @@ func (m Model) statusBarText() string {
 
 	// build right-side segments
 	var rightParts []string
+	if sel := m.selectionStatus(); sel != "" {
+		rightParts = append(rightParts, sel)
+	}
 	if pos := m.stackPosition(); pos != "" {
 		rightParts = append(rightParts, "⇅ "+pos)
 	}

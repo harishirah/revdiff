@@ -77,6 +77,7 @@ const (
 	ActionFlushOutput            Action = "flush_output"
 	ActionNextStackLevel         Action = "next_stack_level"
 	ActionPrevStackLevel         Action = "prev_stack_level"
+	ActionSelectLines            Action = "select_lines"
 )
 
 // SectionPane is the help section name for pane-related keybindings.
@@ -108,6 +109,7 @@ var validActions = map[Action]bool{
 	ActionFlushOutput:      true,
 	ActionNextStackLevel:   true,
 	ActionPrevStackLevel:   true,
+	ActionSelectLines:      true,
 }
 
 // deprecatedActionAliases maps obsolete action names parsed from user
@@ -241,6 +243,7 @@ func defaultDescriptions() []HelpEntry {
 		{ActionNextAnnotation, "next annotation (across files)", "Annotations"},
 		{ActionPrevAnnotation, "previous annotation (across files)", "Annotations"},
 		{ActionFlushOutput, "flush annotations to output file", "Annotations"},
+		{ActionSelectLines, "select lines (a annotates the selection)", "Annotations"},
 
 		// stack navigation
 		{ActionNextStackLevel, "next PR in the stack", "File/Hunk"},
@@ -310,6 +313,7 @@ func defaultBindings() map[string]Action {
 		"O":      ActionFlushOutput,
 		")":      ActionNextStackLevel,
 		"(":      ActionPrevStackLevel,
+		"V":      ActionSelectLines,
 		"v":      ActionToggleCollapsed,
 		"C":      ActionToggleCompact,
 		"w":      ActionToggleWrap,

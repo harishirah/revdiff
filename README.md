@@ -774,6 +774,7 @@ The file picker lists paths currently visible in the sidebar, so annotated-only 
 | Key | Action |
 |-----|--------|
 | `a` or `Enter` (diff pane) | Annotate current diff line |
+| `V` | Select lines: move the cursor to extend, `a` annotates the selection as one range, `V` or `Esc` cancels |
 | `A` | Add file-level annotation (stored at top of diff) |
 | `@` | Toggle annotation list popup (navigate and jump to any annotation) |
 | `}` / `{` | Jump to next/previous annotation (always crosses file boundaries; silent no-op at the first/last annotation) |
@@ -941,7 +942,7 @@ When the leader is pressed, the status bar shows `Pending: ctrl+w, esc to cancel
 
 **Search:** `search`
 
-**Annotations:** `confirm` (annotate line / select file), `annotate_file`, `delete_annotation`, `annot_list`, `open_editor`, `next_annotation`, `prev_annotation`, `flush_output`
+**Annotations:** `confirm` (annotate line / select file), `annotate_file`, `delete_annotation`, `annot_list`, `open_editor`, `next_annotation`, `prev_annotation`, `flush_output`, `select_lines`
 
 **View:** `toggle_collapsed`, `toggle_compact`, `toggle_wrap`, `toggle_tree`, `toggle_line_numbers`, `toggle_blame`, `toggle_word_diff`, `toggle_hunk`, `toggle_untracked`, `mark_reviewed`, `filter_unreviewed`, `theme_select`, `filter`, `info`, `reload`
 

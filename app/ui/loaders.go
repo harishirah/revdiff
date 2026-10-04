@@ -555,6 +555,7 @@ func (m Model) handleFileLoaded(msg fileLoadedMsg) (tea.Model, tea.Cmd) {
 		m.file.lineNumWidth = m.computeLineNumWidth()
 	}
 	m.annot.cursorOnAnnotation = false
+	m.sel = selectionState{}
 	m.layout.scrollX = 0
 	m.modes.collapsed.expandedHunks = make(map[int]bool)
 

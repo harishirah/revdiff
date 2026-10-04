@@ -68,6 +68,14 @@ func (m *Model) newAnnotationInput(placeholder string, prefixWidth int) (textinp
 // startAnnotation enters annotation input mode for the current cursor line.
 func (m *Model) startAnnotation() tea.Cmd {
 	m.clearPendingInputState()
+	// a selection becomes one annotation on its first line spanning to its last
+	m.annot.rangeEnd = 0
+	if idx, _, endLine, _, ok := m.selectionAnnotationTarget(); ok {
+		m.nav.diffCursor = idx
+		m.annot.cursorOnAnnotation = false
+		m.annot.rangeEnd = endLine
+		m.sel = selectionState{}
+	}
 	dl, ok := m.cursorDiffLine()
 	if !ok || dl.ChangeType == diff.ChangeDivider {
 		return nil
@@ -196,7 +204,7 @@ func (m *Model) saveAnnotation() {
 	}
 
 	if m.annot.fileAnnotating {
-		m.saveComment(text, m.file.name, true, 0, "")
+		m.saveComment(text, m.file.name, true, 0, 0, "")
 		return
 	}
 
@@ -205,7 +213,7 @@ func (m *Model) saveAnnotation() {
 		m.cancelAnnotation()
 		return
 	}
-	m.saveComment(text, m.file.name, false, m.diffLineNum(dl), string(dl.ChangeType))
+	m.saveComment(text, m.file.name, false, m.diffLineNum(dl), m.annot.rangeEnd, string(dl.ChangeType))
 }
 
 // saveComment persists the annotation text for the explicitly provided target.
@@ -216,7 +224,7 @@ func (m *Model) saveAnnotation() {
 // pair so cursor movement during an external editor session does not skew the
 // range; when fileName matches the currently loaded file, m.file.lines is
 // scanned, otherwise EndLine expansion is skipped (no hunk context available).
-func (m *Model) saveComment(text, fileName string, fileLevel bool, line int, changeType string) {
+func (m *Model) saveComment(text, fileName string, fileLevel bool, line, endLine int, changeType string) {
 	if text == "" {
 		m.cancelAnnotation()
 		return
@@ -235,7 +243,10 @@ func (m *Model) saveComment(text, fileName string, fileLevel bool, line int, cha
 	}
 
 	a := annotation.Annotation{File: fileName, Line: line, Type: changeType, Comment: text}
-	if hunkKeywordRe.MatchString(text) && fileName == m.file.name {
+	switch {
+	case endLine > line:
+		a.EndLine = endLine
+	case hunkKeywordRe.MatchString(text) && fileName == m.file.name:
 		// re-derive the diff-line index from (line, changeType) so hunk-end
 		// detection survives cursor drift during an external editor session.
 		// only scan when the captured file still matches the loaded one —
@@ -256,6 +267,7 @@ func (m *Model) saveComment(text, fileName string, fileLevel bool, line int, cha
 	m.store.Add(a)
 	m.annot.annotating = false
 	m.annot.fileAnnotating = false // defensive hygiene: parity with file-level branch
+	m.annot.rangeEnd = 0
 	m.annot.existingMultiline = ""
 	m.tree.RefreshFilter(m.annotatedFiles())
 	// sync scroll so a newly added multi-row annotation stays visible when the
@@ -266,6 +278,7 @@ func (m *Model) saveComment(text, fileName string, fileLevel bool, line int, cha
 // cancelAnnotation exits annotation input mode without saving.
 func (m *Model) cancelAnnotation() {
 	m.annot.annotating = false
+	m.annot.rangeEnd = 0
 	m.annot.fileAnnotating = false
 	m.annot.existingMultiline = ""
 	m.layout.viewport.SetContent(m.renderDiff())

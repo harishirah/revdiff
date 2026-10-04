@@ -551,6 +551,7 @@ type vimState struct {
 type annotationState struct {
 	annotating         bool            // true when annotation text input is active
 	fileAnnotating     bool            // true when annotating at file level (Line=0)
+	rangeEnd           int             // end line when annotating a selection; 0 for a single line
 	cursorOnAnnotation bool            // true when cursor is on the annotation sub-line (not the diff line)
 	input              textinput.Model // text input for annotations
 	// existingMultiline holds the original multi-line comment of an annotation
@@ -604,6 +605,7 @@ type Model struct {
 	editorState editorState       // transient hint state for source-file editor launches
 	output      outputState       // transient hint state for the O in-session output flush
 	stack       stackState        // per-level labels and transient hint for --stack-ref reviews
+	sel         selectionState    // line-range selection in the diff pane
 	keys        keyState          // chord-pending state and transient hint for leader-chord keybindings
 	vim         vimState          // count accumulator, pending letter leader, and transient hint for vim-motion preset
 	wheel       wheelState        // diff-pane mouse wheel coalescing (debounced render via wheelDebounceMsg)
@@ -1056,6 +1058,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.reload.hint = ""
 	m.output.hint = ""
 	m.stack.hint = ""
+	m.sel.hint = ""
 	m.compact.hint = ""
 	m.editorState.hint = ""
 	m.keys.hint = ""
@@ -1155,6 +1158,8 @@ func (m Model) dispatchAction(action keymap.Action) (tea.Model, tea.Cmd) {
 		return m.handleAnnotNav(action == keymap.ActionNextAnnotation)
 	case keymap.ActionNextStackLevel, keymap.ActionPrevStackLevel:
 		return m.handleStackNav(action == keymap.ActionNextStackLevel)
+	case keymap.ActionSelectLines:
+		return m.handleSelectToggle()
 	case keymap.ActionReload:
 		return m.handleReload()
 	case keymap.ActionFlushOutput:

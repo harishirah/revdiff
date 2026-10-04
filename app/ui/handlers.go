@@ -178,6 +178,10 @@ func (m Model) handleFileAnnotateKey() (tea.Model, tea.Cmd) {
 
 // handleEscKey clears active search results on esc.
 func (m Model) handleEscKey() (tea.Model, tea.Cmd) {
+	if m.sel.active {
+		m.clearSelection()
+		return m, nil
+	}
 	if len(m.search.matches) > 0 {
 		m.clearSearch()
 		m.layout.viewport.SetContent(m.renderDiff())

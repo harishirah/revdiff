@@ -160,6 +160,9 @@ across files by concern to keep files under ~500 lines:
 - **`filepicker.go`** — file picker open and selected-path jump integration; delegates
   visible-order/filter ownership to `FileTreeComponent` and loading to the guarded file loader
 - **`search.go`** — search input handling, match computation, navigation
+- **`selection.go`** — line-range selection (`V`): the range runs from the anchor to the cursor, a
+  gutter marker paints it, and `a` maps it to one annotation range in a single number space (old
+  numbers for an all-removed selection, new numbers otherwise)
 - **`mouse.go`** — mouse event routing: `handleMouse` dispatch, `hitTest` pane classification
   (`hitZone`), wheel/left-click helpers (`clickTree`, `clickDiff`), layout helpers
   (`statusBarHeight`, `diffTopRow`, `treeTopRow`). Diff-pane wheel events defer both the cursor pin
