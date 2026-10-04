@@ -94,7 +94,7 @@ To route an annotation, find the level whose `<ordinal>~<head>` label is a prefi
 
 **Do not split the path on the first `/`.** Branch names contain slashes (`2~feature/ui-work/app/main.go`), so a positional split attributes the fix to a branch named `2~feature`. Match against the known label set instead — you have it from `detect-stack.sh`.
 
-Classification (Step 3.5) is unchanged; explanation requests are answered the same way.
+Classification (Step 3.5) is unchanged; explanation requests are answered the same way. Step 3.6 then decides whether to fix the stack or post each level's comments to its own PR.
 
 ### Applying fixes across the stack
 
@@ -312,13 +312,35 @@ These are questions the user wants answered, not code changes.
    a. Write the explanation to a temp markdown file (e.g., `/tmp/revdiff-explain-XXXXXX.md`)
    b. Launch revdiff with `--only=/tmp/revdiff-explain-XXXXXX.md` via the launcher script — this opens the explanation as a scrollable markdown view with TOC sidebar
    c. **If user quits without annotations** → explanation accepted, clean up temp file, proceed:
-      - If pending code-change directives exist → go to Step 4
+      - If pending code-change directives exist → go to Step 3.6
       - Otherwise → go to Step 6 (re-launch revdiff with the original diff ref)
    d. **If user annotates the explanation** → these are follow-up questions or clarification requests. Read the annotations, refine/extend the explanation markdown, write updated temp file, go back to step (b)
 
 The explanation loop continues until the user quits without annotating. This allows a natural back-and-forth dialogue where the user can ask for more detail or corrections on specific parts of the explanation.
 
-**If no explanation requests** — all annotations are code-change directives, proceed directly to Step 4.
+**If no explanation requests** — all annotations are code-change directives, proceed directly to Step 3.6.
+
+### Step 3.6: Fix or Post to GitHub
+
+Before planning fixes, decide whether the code-change annotations are for you to fix, or review comments for a PR someone else owns.
+
+The review is **of a PR** when it was a stack review (each level's PR number is in the `detect-stack.sh` table), a `gh pr diff <N> | ... --stdin` review (PR N), or a ref review whose current branch has an open PR (`gh pr view --json number,author,url` succeeds). Working-tree, `--only`, `--all-files` and other non-PR reviews skip this step: go to Step 4.
+
+Recommend by authorship: compare each PR's `author.login` with `gh api user --jq .login`. All yours → recommend **Fix them**; none yours → recommend **Post as a draft GitHub review**; mixed → no recommendation. Ask with AskUserQuestion: **Fix them** or **Post as a draft GitHub review**.
+
+**Post path:**
+
+1. Write the annotations exactly as received to a temp file (e.g. `/tmp/revdiff-post-XXXXXX.md`).
+2. Dry run per PR:
+   ```bash
+   "${CLAUDE_SKILL_DIR}/scripts/post-gh-review.py" --pr <N> --annotations <file> --dry-run
+   ```
+   Stack review: run once per level with `--prefix "<label>/"` and that level's PR, so each PR gets only its own annotations with the label stripped. A PR in another repository: add `--repo OWNER/REPO`.
+3. Show the user each PR's summary and preview lines verbatim (`RIGHT`/`LEFT` = inline comment, `BODY` = moved into the review body because the line is outside the PR diff or the note is file-level, `SKIP` = explanation request, never posted). Ask for an explicit yes before posting, in its own turn.
+4. Run the same commands without `--dry-run`. Report each `review_url:` and say plainly that the review is a **draft**: only the user sees it until they press Submit on GitHub. On `error:`, report it verbatim.
+5. Stop. Do not fix code and do not re-launch revdiff.
+
+**Fix path:** go to Step 4.
 
 ### Step 4: Plan Changes
 

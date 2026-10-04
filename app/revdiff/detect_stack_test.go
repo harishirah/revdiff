@@ -229,7 +229,7 @@ func TestSkillScriptCopiesInSync(t *testing.T) {
 
 	checked := 0
 	err := filepath.WalkDir(filepath.Join(root, "plugins"), func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || filepath.Ext(path) != ".sh" {
+		if err != nil || d.IsDir() || (filepath.Ext(path) != ".sh" && filepath.Ext(path) != ".py") {
 			return err
 		}
 		body, err := os.ReadFile(path) //nolint:gosec // path comes from walking the repo
